@@ -4,8 +4,8 @@ import os
 from datetime import datetime
 import uuid
 from functions.shared.task_store import user_uploaded_folders, user_current_folder
-import pyclamd
-
+# import pyclamd
+import logging
 upload = APIRouter()
 
 # 文件头白名单
@@ -26,8 +26,8 @@ def check_magic_header(content: bytes) -> str:
 
 # 初始化 ClamAV
 try:
-    cd = pyclamd.ClamdAgnostic()
-    if not cd.ping():
+    #cd = pyclamd.ClamdAgnostic()
+    #if not cd.ping():
         cd = None
 except Exception:
     cd = None
