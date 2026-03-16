@@ -10,3 +10,12 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 
 # 测试文件目录
 TESTS_DIR = ROOT_DIR / "tests"
+
+
+# DeepseekSSPU 模型配置
+DEEPSEEK_SSPU_MODEL = {
+    "BASE_URL": os.getenv("DEEPSEEKSSPU_MODEL_BASE_URL"),
+    "MODEL_NAME": os.getenv("DEEPSEEKSSPU_MODEL_NAME"),
+    "TEMPERATURE": os.getenv("DEEPSEEKSSPU_MODEL_TEMPERATURE"),
+    "MAX_TOKENS": os.getenv("DEEPSEEKSSPU_MODEL_MAX_TOKENS"),
+}
