@@ -1,0 +1,9 @@
+# .venv .idea
+.venv
+.idea
+
+# .env
+*.env
+
+# tests
+tests/*
