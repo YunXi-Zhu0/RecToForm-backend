@@ -1,0 +1,7 @@
+[project]
+name = "rectoform"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.9.25"
+dependencies = []
