@@ -19,3 +19,10 @@ DEEPSEEK_SSPU_MODEL = {
     "TEMPERATURE": os.getenv("DEEPSEEKSSPU_MODEL_TEMPERATURE"),
     "MAX_TOKENS": os.getenv("DEEPSEEKSSPU_MODEL_MAX_TOKENS"),
 }
+
+# qwen3-max 模型配置
+QWEN3_MAX_MODEL = {
+    "MODEL_NAME": "qwen3-max",
+    "API_KEY": os.getenv("QWEN3_MAX_API_KEY"),
+    "BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+}
