@@ -26,3 +26,10 @@ QWEN3_MAX_MODEL = {
     "API_KEY": os.getenv("QWEN3_MAX_API_KEY"),
     "BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1"
 }
+
+
+# PaddleOCR-VL-1.5_API
+PaddleOCR_VL_1P5 = {
+    "API_URL": os.getenv("PADDLEOCR_VL_1P5_API_URL"),
+    "TOKEN": os.getenv("PADDLEOCR_VL_1P5_TOKEN")
+}
