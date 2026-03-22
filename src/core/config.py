@@ -33,3 +33,8 @@ PaddleOCR_VL_1P5 = {
     "API_URL": os.getenv("PADDLEOCR_VL_1P5_API_URL"),
     "TOKEN": os.getenv("PADDLEOCR_VL_1P5_TOKEN")
 }
+
+# PaddleOCR-VL-1.5_SSPU_API
+PaddleOCR_VL_1P5_SSPU = {
+    "API_URL": os.getenv("PADDLEOCR_VL_1P5_SSPU_API_URL"),
+}
