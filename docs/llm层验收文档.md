@@ -2,14 +2,14 @@
 
 ## 实现概述
 
-本次重构围绕 `contexts/llm.md` 定义的分层目标，完成了 LLM 层的第一版统一抽象，实现了：
+本次重构围绕 `contexts/llm.md` 定义的分层目标，完成了 LLM 层的两阶段落地实现：
 
 - `schema`：统一请求、响应、消息、图片输入结构
 - `capabilities`：统一模型能力声明
 - `base`：统一 provider 抽象接口
 - `providers`：落地官方 `qwen` 与本地 `qwen3-vl` provider
 - `factory`：基于配置或显式名称返回 provider
-- `services/llm`：提供最小业务服务入口，负责面向上层组装请求并发起调用
+- `services/llm`：负责 prompt 组装、模型调用、JSON 清洗和结构化结果输出
 
 同时保留了旧导入路径兼容层，使已有代码仍可通过原路径访问 `Qwen3MaxLLM` 和 `Qwen3VL8BSSPULLM`。
 
@@ -79,17 +79,25 @@
 - 基于 `AsyncOpenAI` 调用官方兼容接口
 - 将响应转为统一 `LLMResponse`
 
-### 5. 业务服务层入口
+### 5. services/llm 业务能力
 
 新增：
 
+- `src/services/llm/models.py`
+- `src/services/llm/prompt_builder.py`
+- `src/services/llm/json_parser.py`
 - `src/services/llm/service.py`
 
-当前提供：
+当前已实现：
 
-- `LLMService.analyze_images(...)`
-
-该层只做上层请求组织和能力约束，不直接拼厂商专属请求体。
+- `PromptContext` / `PromptFieldSet`：统一描述模板、字段、文件类型、页码和附加约束
+- `build_system_prompt(...)`：按提示词规范构造系统提示词
+- `build_user_prompt(...)`：按模板信息、字段集合和页码信息构造用户提示词
+- `parse_structured_output(...)`：从模型输出中提取 JSON 对象
+- `normalize_fields(...)`：过滤多余字段、补齐缺失字段、统一空值策略
+- `LLMService.build_prompts(...)`
+- `LLMService.parse_json_result(...)`
+- `LLMService.extract_structured_data(...)`
 
 ### 6. 兼容迁移
 
@@ -127,10 +135,14 @@
 - `src/integrations/llm/factory/llm_factory.py`
 - `src/services/__init__.py`
 - `src/services/llm/__init__.py`
+- `src/services/llm/models.py`
+- `src/services/llm/prompt_builder.py`
+- `src/services/llm/json_parser.py`
 - `src/services/llm/service.py`
 - `src/integrations/llm/core/model/qwen.py`
 - `src/integrations/llm/core/model/qwen3_vl_8b_sspu.py`
 - `tests/test_llm_architecture.py`
+- `tests/test_llm_service.py`
 
 ## 遇到的问题
 
@@ -144,23 +156,37 @@
 
 ### 3. 仓库 Python 版本声明不一致
 
-`AGENTS.md` 目标是 Python `3.9.25`，但 `pyproject.toml` 原先为 `>=3.10`。本次已调整为 `>=3.9,<3.10`，使约束与项目目标一致。
+`AGENTS.md` 目标是 Python `3.9.25`，但仓库文件中曾出现更高版本约束。本次统一恢复到 `>=3.9,<3.10`，使约束与项目目标一致。
 
-### 4. 测试目录被忽略
+### 4. 测试目录默认忽略
 
-`.gitignore` 原先直接忽略整个 `tests/*`，不利于新增结构测试。本次调整为忽略测试缓存和输出产物，而非忽略全部测试文件。
+`.gitignore` 原先会拦住新增测试文件，本次补充白名单后才能纳入新的 LLM 单元测试。
+
+### 5. Windows 环境下文本写入 BOM
+
+在当前 PowerShell 环境中，直接使用 UTF-8 写文件会引入 BOM。本次额外做了无 BOM 重写，避免影响 Python 源文件头部。
 
 ## 验证结果
 
 本次重构完成后，已补充结构级单元测试：
 
 - `tests/test_llm_architecture.py`
+- `tests/test_llm_service.py`
 
 覆盖点包括：
 
 - `LLMRequest` 组装
 - `LLMFactory` provider 创建
 - capability 校验失败路径
+- prompt 构造
+- fenced json 清洗
+- 额外字段过滤
+- 缺失字段补齐
+
+已执行验证：
+
+- `python -m unittest tests.test_llm_architecture tests.test_llm_service`
+- `python -m compileall src tests`
 
 说明：
 
@@ -169,7 +195,7 @@
 
 ## 后续建议
 
-- 在 `src/services/llm/` 中继续补 prompt builder、JSON 清洗和业务级响应校验
+- 在 `src/services/workflow/` 中接入 `PromptContext` 与 `LLMService.extract_structured_data(...)`
 - 为 `factory` 增加按能力自动筛选 provider 的更完整逻辑
 - 为本地 `qwen3-vl` provider 增加更严格的错误类型封装和超时重试策略
 - 为真实接口调用补集成测试，并区分 mock 测试与联网联调测试
