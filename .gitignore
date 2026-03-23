@@ -12,10 +12,14 @@ __pycache__/
 # tests
 tests/*
 !tests/__init__.py
-!tests/test_llm_architecture.py
-!tests/test_llm_service.py
+!tests/README.md
+!tests/fixtures/
+!tests/fixtures/**
+!tests/scripts/
+!tests/scripts/*.py
+!tests/unit/
+!tests/unit/*.py
 
 # test artifacts
 tests/__pycache__/
-tests/paddleOCR_output/
-tests/paddleOCR_SSPU_output/
+tests/scripts/outputs/
