@@ -1,11 +1,14 @@
 import unittest
+from base64 import b64encode
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from src.integrations.llm.capabilities.llm_capabilities import LLMCapabilities
 from src.integrations.llm.factory.llm_factory import LLMFactory
 from src.integrations.llm.providers.qwen.local_openai_compatible import (
     QwenLocalOpenAICompatibleProvider,
 )
+from src.integrations.llm.providers.qwen.official import QwenOfficialProvider
 from src.integrations.llm.schema.request import LLMRequest
 
 
@@ -36,6 +39,61 @@ class LLMArchitectureTests(unittest.TestCase):
                 "qwen_local_openai_compatible",
                 required_capabilities=LLMCapabilities(supports_tools=True),
             )
+
+    def test_official_provider_declares_vision_capability(self) -> None:
+        provider = object.__new__(QwenOfficialProvider)
+        provider.max_tokens = 2048
+
+        capabilities = provider.get_capabilities()
+
+        self.assertTrue(capabilities.supports_vision)
+        self.assertEqual(capabilities.max_output_tokens, 2048)
+
+    def test_official_provider_builds_multimodal_messages(self) -> None:
+        provider = object.__new__(QwenOfficialProvider)
+        provider.model_name = "qwen3-vl-plus"
+
+        with TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "invoice.png"
+            image_bytes = b"fake-image-content"
+            image_path.write_bytes(image_bytes)
+
+            request = LLMRequest.from_prompts(
+                user_prompt="extract invoice fields",
+                system_prompt="return json only",
+                image_paths=[image_path],
+                response_format={"type": "json_object"},
+            )
+
+            messages = provider._build_messages(request)
+
+        self.assertEqual(messages[0], {"role": "system", "content": "return json only"})
+        self.assertEqual(messages[1]["role"], "user")
+        self.assertEqual(messages[1]["content"][0]["type"], "image_url")
+        self.assertEqual(
+            messages[1]["content"][0]["image_url"]["url"],
+            "data:image/png;base64,%s" % b64encode(image_bytes).decode("utf-8"),
+        )
+        self.assertEqual(
+            messages[1]["content"][1],
+            {"type": "text", "text": "extract invoice fields"},
+        )
+
+    def test_official_provider_rejects_non_vision_model_for_images(self) -> None:
+        provider = object.__new__(QwenOfficialProvider)
+        provider.model_name = "qwen3.5-397b-a17b"
+
+        with TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "invoice.png"
+            image_path.write_bytes(b"fake-image-content")
+
+            request = LLMRequest.from_prompts(
+                user_prompt="extract invoice fields",
+                image_paths=[image_path],
+            )
+
+            with self.assertRaises(ValueError):
+                provider._build_messages(request)
 
 
 if __name__ == "__main__":

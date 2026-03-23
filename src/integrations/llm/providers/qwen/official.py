@@ -1,4 +1,6 @@
-from typing import Optional, Sequence
+import base64
+import mimetypes
+from typing import Any, Dict, List, Optional, Sequence
 
 try:
     from openai import AsyncOpenAI
@@ -14,6 +16,7 @@ from src.integrations.llm.schema.response import LLMResponse, LLMUsage
 
 class QwenOfficialProvider(BaseLLMProvider):
     provider_name = "qwen_official"
+    _VISION_MODEL_MARKERS = ("vl", "qvq")
 
     def __init__(self) -> None:
         if AsyncOpenAI is None:
@@ -28,13 +31,50 @@ class QwenOfficialProvider(BaseLLMProvider):
 
     def get_capabilities(self) -> LLMCapabilities:
         return LLMCapabilities(
-            supports_vision=False,
+            supports_vision=True,
             supports_system_prompt=True,
             supports_json_output=True,
+            max_output_tokens=self.max_tokens,
         )
 
-    async def invoke(self, request: LLMRequest) -> LLMResponse:
-        messages = []
+    def _encode_image_to_data_url(self, image_path: ImagePath) -> str:
+        mime_type, _ = mimetypes.guess_type(str(image_path))
+        resolved_mime_type = mime_type or "image/jpeg"
+        base64_image = base64.b64encode(image_path.read_bytes()).decode("utf-8")
+        return "data:%s;base64,%s" % (resolved_mime_type, base64_image)
+
+    def _build_multimodal_user_content(self, request: LLMRequest) -> List[Dict[str, Any]]:
+        content: List[Dict[str, Any]] = []
+
+        for image_input in request.image_inputs:
+            if not image_input.path.is_file():
+                raise FileNotFoundError("Image file not found: %s" % image_input.path)
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": self._encode_image_to_data_url(image_input.path),
+                    },
+                }
+            )
+
+        if request.user_prompt:
+            content.append({"type": "text", "text": request.user_prompt})
+
+        return content
+
+    def _ensure_vision_model_configured(self) -> None:
+        normalized_model_name = self.model_name.lower()
+        if not any(marker in normalized_model_name for marker in self._VISION_MODEL_MARKERS):
+            raise ValueError(
+                "Qwen official provider received image inputs, but model '%s' is not a vision-capable model. "
+                "Please configure a VL model such as qwen3-vl-plus or qwen-vl-max."
+                % self.model_name
+            )
+
+    def _build_messages(self, request: LLMRequest) -> List[Dict[str, Any]]:
+        messages: List[Dict[str, Any]] = []
+
         if request.system_prompt:
             messages.append({"role": "system", "content": request.system_prompt})
 
@@ -42,16 +82,32 @@ class QwenOfficialProvider(BaseLLMProvider):
             messages.extend(
                 {"role": item.role, "content": item.content} for item in request.messages
             )
-        elif request.user_prompt:
-            messages.append({"role": "user", "content": request.user_prompt})
-        else:
-            raise ValueError("Qwen official provider requires user prompt or messages.")
 
+        if request.image_inputs:
+            self._ensure_vision_model_configured()
+            messages.append(
+                {
+                    "role": "user",
+                    "content": self._build_multimodal_user_content(request),
+                }
+            )
+        elif request.user_prompt and not request.messages:
+            messages.append({"role": "user", "content": request.user_prompt})
+
+        if not messages or (
+            len(messages) == 1 and messages[0]["role"] == "system"
+        ):
+            raise ValueError("Qwen official provider requires user prompt, messages, or image inputs.")
+
+        return messages
+
+    async def invoke(self, request: LLMRequest) -> LLMResponse:
         completion = await self.client.chat.completions.create(
             model=self.model_name,
-            messages=messages,
+            messages=self._build_messages(request),
             temperature=self.temperature if request.temperature is None else request.temperature,
             max_tokens=self.max_tokens if request.max_tokens is None else request.max_tokens,
+            response_format=request.response_format,
         )
 
         usage = completion.usage
@@ -74,10 +130,22 @@ class Qwen3MaxLLM:
     def __init__(self) -> None:
         self.provider = QwenOfficialProvider()
 
-    async def invoke(self, user_prompt: str, system_prompt: Optional[str] = None) -> str:
+    async def invoke(
+        self,
+        user_prompt: str,
+        system_prompt: Optional[str] = None,
+        image_paths: Optional[Sequence[ImagePath]] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        response_format: Optional[Dict[str, Any]] = None,
+    ) -> str:
         request = LLMRequest.from_prompts(
             user_prompt=user_prompt,
             system_prompt=system_prompt,
+            image_paths=image_paths,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format=response_format,
         )
         response = await self.provider.invoke(request)
         return response.parsed_text
