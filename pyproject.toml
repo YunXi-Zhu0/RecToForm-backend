@@ -5,10 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "aiofiles>=25.1.0",
     "dotenv>=0.9.9",
     "easyofd==0.5.1",
     "httpx>=0.28.1",
     "openai>=2.28.0",
+    "pillow>=11.3.0",
     "requests>=2.32.5",
 ]
