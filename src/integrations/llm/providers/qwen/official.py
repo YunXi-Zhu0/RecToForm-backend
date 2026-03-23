@@ -7,7 +7,7 @@ try:
 except ImportError:  # pragma: no cover - defer hard failure to runtime construction
     AsyncOpenAI = None
 
-from src.core.config import QWEN3_MAX_MODEL
+from src.core.config import QWEN3_VL_PLUS_MODEL
 from src.integrations.llm.base.llm import BaseLLMProvider
 from src.integrations.llm.capabilities.llm_capabilities import LLMCapabilities
 from src.integrations.llm.schema.request import ImagePath, LLMRequest
@@ -16,17 +16,16 @@ from src.integrations.llm.schema.response import LLMResponse, LLMUsage
 
 class QwenOfficialProvider(BaseLLMProvider):
     provider_name = "qwen_official"
-    _VISION_MODEL_MARKERS = ("vl", "qvq")
 
     def __init__(self) -> None:
         if AsyncOpenAI is None:
             raise ImportError("openai package is required for qwen_official provider.")
-        self.model_name = QWEN3_MAX_MODEL["MODEL_NAME"]
-        self.temperature = QWEN3_MAX_MODEL["TEMPERATURE"]
-        self.max_tokens = QWEN3_MAX_MODEL["MAX_TOKENS"]
+        self.model_name = QWEN3_VL_PLUS_MODEL["MODEL_NAME"]
+        self.temperature = QWEN3_VL_PLUS_MODEL["TEMPERATURE"]
+        self.max_tokens = QWEN3_VL_PLUS_MODEL["MAX_TOKENS"]
         self.client = AsyncOpenAI(
-            api_key=QWEN3_MAX_MODEL["API_KEY"],
-            base_url=QWEN3_MAX_MODEL["BASE_URL"],
+            api_key=QWEN3_VL_PLUS_MODEL["API_KEY"],
+            base_url=QWEN3_VL_PLUS_MODEL["BASE_URL"],
         )
 
     def get_capabilities(self) -> LLMCapabilities:
@@ -63,15 +62,6 @@ class QwenOfficialProvider(BaseLLMProvider):
 
         return content
 
-    def _ensure_vision_model_configured(self) -> None:
-        normalized_model_name = self.model_name.lower()
-        if not any(marker in normalized_model_name for marker in self._VISION_MODEL_MARKERS):
-            raise ValueError(
-                "Qwen official provider received image inputs, but model '%s' is not a vision-capable model. "
-                "Please configure a VL model such as qwen3-vl-plus or qwen-vl-max."
-                % self.model_name
-            )
-
     def _build_messages(self, request: LLMRequest) -> List[Dict[str, Any]]:
         messages: List[Dict[str, Any]] = []
 
@@ -84,7 +74,6 @@ class QwenOfficialProvider(BaseLLMProvider):
             )
 
         if request.image_inputs:
-            self._ensure_vision_model_configured()
             messages.append(
                 {
                     "role": "user",

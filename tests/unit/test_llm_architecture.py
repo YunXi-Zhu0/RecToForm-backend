@@ -79,22 +79,5 @@ class LLMArchitectureTests(unittest.TestCase):
             {"type": "text", "text": "extract invoice fields"},
         )
 
-    def test_official_provider_rejects_non_vision_model_for_images(self) -> None:
-        provider = object.__new__(QwenOfficialProvider)
-        provider.model_name = "qwen3.5-397b-a17b"
-
-        with TemporaryDirectory() as temp_dir:
-            image_path = Path(temp_dir) / "invoice.png"
-            image_path.write_bytes(b"fake-image-content")
-
-            request = LLMRequest.from_prompts(
-                user_prompt="extract invoice fields",
-                image_paths=[image_path],
-            )
-
-            with self.assertRaises(ValueError):
-                provider._build_messages(request)
-
-
 if __name__ == "__main__":
     unittest.main()

@@ -29,12 +29,12 @@ TESTS_DIR = ROOT_DIR / "tests"
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "qwen_local_openai_compatible")
 
-QWEN3_MAX_MODEL = {
-    "MODEL_NAME": "qwen3-max",
-    "API_KEY": os.getenv("QWEN3_MAX_API_KEY"),
+QWEN3_VL_PLUS_MODEL = {
+    "MODEL_NAME": "qwen3-vl-plus",
+    "API_KEY": os.getenv("QWEN3_VL_PLUS_API_KEY"),
     "BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "TEMPERATURE": _get_float_env("QWEN3_MAX_TEMPERATURE", 0.7),
-    "MAX_TOKENS": _get_int_env("QWEN3_MAX_MAX_TOKENS", 500),
+    "TEMPERATURE": _get_float_env("QWEN3_VL_PLUS_TEMPERATURE", 0.7),
+    "MAX_TOKENS": _get_int_env("QWEN3_VL_PLUS_MAX_TOKENS", 500),
 }
 
 QWEN3_VL_8B_SSPU_MODEL = {
@@ -50,7 +50,7 @@ QWEN3_VL_8B_SSPU_MODEL = {
 LLM_PROVIDERS = {
     "qwen_official": {
         "provider": "qwen_official",
-        "model_name": QWEN3_MAX_MODEL["MODEL_NAME"],
+        "model_name": QWEN3_VL_PLUS_MODEL["MODEL_NAME"],
     },
     "qwen_local_openai_compatible": {
         "provider": "qwen_local_openai_compatible",
