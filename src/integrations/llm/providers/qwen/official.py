@@ -115,7 +115,7 @@ class QwenOfficialProvider(BaseLLMProvider):
         )
 
 
-class Qwen3MaxLLM:
+class Qwen3VlPlusLLM:
     def __init__(self) -> None:
         self.provider = QwenOfficialProvider()
 
