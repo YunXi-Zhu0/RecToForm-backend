@@ -2,8 +2,19 @@
 .venv
 .idea
 
+# Python cache
+__pycache__/
+*.py[cod]
+
 # .env
 *.env
 
 # tests
 tests/*
+!tests/__init__.py
+!tests/test_llm_architecture.py
+
+# test artifacts
+tests/__pycache__/
+tests/paddleOCR_output/
+tests/paddleOCR_SSPU_output/
