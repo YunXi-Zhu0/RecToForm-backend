@@ -5,10 +5,10 @@
 This project is a self-service invoice information extraction and form-filling program. The core process is as follows:
 
 1. The user uploads invoice files.
-2. The program uses the PaddleOCR API to perform OCR on the invoices and outputs Markdown files.
-3. The Markdown files must preserve table structures so that invoice fields correspond to the original invoice content as closely as possible.
-4. The program sends the Markdown together with prompts to the LLM API.
-5. The LLM analyzes the Markdown fields and returns structured JSON.
+2. The program determines the uploaded file type.
+3. If the file is a PDF, the program extracts page images or embedded invoice images from the PDF.
+4. The program sends invoice images together with prompts to the `qwen3-vl` model API.
+5. The `qwen3-vl` model analyzes the invoice images and returns structured JSON.
 6. The program automatically fills the Excel form based on the mapping between JSON fields and Excel template fields.
 
 ## Current Technical Constraints
@@ -16,8 +16,9 @@ This project is a self-service invoice information extraction and form-filling p
 - Target Python version: `3.9.25`
 - Dependency management: `uv`
 - Backend framework: `FastAPI`
-- OCR technology: `PaddleOCR-VL-1.5`, called via API
-- LLM technology: `DeepSeek API`, called via API
+- File processing: image file direct pass-through plus PDF image extraction
+- LLM technology: `qwen3-vl`, called via API
+- Model form: vision-language model (`VL`)
 - Project directory layout: use `src layout`
 
 ## Functional Scope
@@ -25,8 +26,9 @@ This project is a self-service invoice information extraction and form-filling p
 ### Confirmed Main Workflow
 
 - Invoice file upload
-- OCR recognition and generation of Markdown intermediate results
-- LLM parsing of Markdown and output of JSON
+- File type detection and preprocessing
+- PDF image extraction when the uploaded file is a PDF
+- `qwen3-vl` parsing of invoice images and output of JSON
 - Filling Excel based on field mappings
 
 ### Template and Field Selection Capability
@@ -36,15 +38,16 @@ This project is a self-service invoice information extraction and form-filling p
 - Optional fields must be included in LLM prompt construction.
 - LLM invocation must distinguish between:
   - System prompt: defines role, output format, field constraints, and missing-value handling rules
-  - User prompt: contains OCR Markdown content, template information, required fields, and optional fields
+  - User prompt: contains file context, template information, required fields, optional fields, and image analysis instructions
 
 ## Design Principles
 
-- OCR output must prioritize preserving the original invoice semantics and table structure to avoid introducing ambiguity for downstream LLM parsing.
+- File preprocessing must preserve original invoice semantics and page order, and must not destroy key layout information before visual analysis.
+- PDF extraction must keep page-to-image relationships auditable so that downstream field verification can trace back to the source page.
 - LLM output must be stable, validatable JSON and must not rely on natural-language explanations.
 - Excel form-filling logic must be based on explicit field mappings and must avoid implicit matching.
 - Templates, field definitions, and prompts should be configurable as much as possible and should not be hardcoded into the business workflow.
-- OCR, LLM, template mapping, and form-filling workflows should be implemented in layers to make model or template replacement easier.
+- File preprocessing, `qwen3-vl` analysis, template mapping, and form-filling workflows should be implemented in layers to make model or template replacement easier.
 
 ## Recommended Module Partitioning
 
@@ -67,14 +70,15 @@ This project is a self-service invoice information extraction and form-filling p
 - `.env`
   - Stores sensitive data and environment-specific configuration and must not contain business logic
 - `src/integrations/`
-  - Wrappers for external interface calls, such as PaddleOCR and DeepSeek LLM
-- `src/services/ocr/`
+  - Wrappers for external interface calls, such as PDF/image processing dependencies and `qwen3-vl`
+- `src/services/document/`
   - Invoice file preprocessing
-  - PaddleOCR API calls
-  - Markdown intermediate result generation
+  - File type detection
+  - PDF image extraction
+  - Image normalization and page/image manifest generation
 - `src/services/llm/`
   - Prompt assembly
-  - DeepSeek API calls
+  - `qwen3-vl` API calls
   - JSON result cleaning and validation
 - `src/services/template/`
   - Default template definitions
@@ -85,7 +89,7 @@ This project is a self-service invoice information extraction and form-filling p
   - Field placement and form filling
 - `src/services/workflow`
   - Orchestrates the entire task workflow
-  - Responsible for business orchestration of "read invoice -> OCR -> LLM analysis -> JSON validation -> fill Excel"
+  - Responsible for business orchestration of "read invoice -> detect file type -> extract images if needed -> VL analysis -> JSON validation -> fill Excel"
 
 ## API Layer Conventions
 
@@ -109,20 +113,23 @@ This project is a self-service invoice information extraction and form-filling p
 
 It is recommended to maintain at least the following intermediate data objects:
 
-- OCR Markdown
+- Uploaded file metadata
+- File type detection result
+- Extracted image list or page-image manifest
 - Template metadata
 - User-selected field list
-- Raw LLM response
+- Raw `qwen3-vl` response
 - Structured JSON
 - Excel field mapping results
 
 ## Development Requirements
 
-- New features should prioritize the main chain of "upload -> OCR -> Markdown -> LLM JSON -> Excel form filling".
+- New features should prioritize the main chain of "upload -> file type detection -> PDF image extraction or image direct pass-through -> VL JSON -> Excel form filling".
 - Any change involving the LLM must simultaneously consider the system prompt, user prompt, JSON schema, and exception fallback handling.
 - Any change involving templates must simultaneously consider default templates, optional fields, field mappings, and front-end/back-end parameter passing.
+- Any change involving PDF support must simultaneously consider extraction strategy, page order, image quality, and downstream model input limits.
 - External capabilities must be uniformly wrapped through API clients and must not be assembled directly in the route layer.
-- Key workflows should retain auditable intermediate results for troubleshooting recognition errors and field mapping errors.
+- Key workflows should retain auditable intermediate results for troubleshooting image extraction errors, recognition errors, and field mapping errors.
 - Code organization must follow the established directory responsibilities and must avoid mixing integration logic, workflow orchestration logic, and API route logic together.
 - Asynchronous interfaces and task orchestration should prioritize `async/await` and avoid introducing blocking external calls in the API layer.
 - Development must maintain modular thinking and should advance in small features and small phases rather than piling up a large number of changes at once.
@@ -138,9 +145,9 @@ It is recommended to maintain at least the following intermediate data objects:
   - The key workflow, algorithm formula, or processing pipeline
   - The scope of impact
 - Recommended commit formats are as follows:
-  - `feat: 新增发票 OCR 到 Markdown 的异步处理流程`
-  - `fix: 修复 DeepSeek 返回非 JSON 时的解析兜底逻辑`
-  - `refactor: 拆分模板字段映射与 Excel 填表服务`
+  - `feat: 新增 PDF 发票抽图与视觉模型结构化提取流程`
+  - `fix: 修复视觉模型返回非 JSON 时的解析兜底逻辑`
+  - `refactor: 拆分文件预处理、视觉识别与 Excel 填表服务`
 - If more detail is needed, prefer using a multi-line commit message in Chinese.
 - After completing each relatively independent small module, small feature, or small phase, proactively remind the user whether a `commit` is needed.
 
@@ -154,4 +161,4 @@ It is recommended to maintain at least the following intermediate data objects:
 ## Notes
 
 - The current Python version declaration in `pyproject.toml` may be inconsistent with the target version `3.9.25`; this should be unified in later implementation.
-- The existing LLM integration code currently contains both `Qwen` and `DeepSeek` related implementations. If `DeepSeek API` is the formal solution, the interface and default configuration should be unified in later iterations.
+- The existing repository still contains OCR-oriented design traces. Future iterations should unify the default solution around the `qwen3-vl` path and remove outdated OCR-to-Markdown assumptions.
