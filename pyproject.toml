@@ -3,7 +3,7 @@ name = "rectoform"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.9,<3.10"
+requires-python = ">=3.10"
 dependencies = [
     "dotenv>=0.9.9",
     "easyofd==0.5.1",
