@@ -1,34 +1,26 @@
 # LLM层验收文档
 
-## 实现概述
+## 验收范围
 
-本次重构围绕 `contexts/llm.md` 定义的分层目标，完成了 LLM 层的两阶段落地实现：
+本文档用于汇总当前 `refactor/rec2form` 分支上 LLM 层已经完成的架构改造、Provider 接入、业务层能力落地、兼容层清理，以及当前遗留事项。
 
-- `schema`：统一请求、响应、消息、图片输入结构
-- `capabilities`：统一模型能力声明
-- `base`：统一 provider 抽象接口
-- `providers`：落地官方 `qwen` 与本地 `qwen3-vl` provider
-- `factory`：基于配置或显式名称返回 provider
-- `services/llm`：负责 prompt 组装、模型调用、JSON 清洗和结构化结果输出
+## 已完成内容
 
-同时保留了旧导入路径兼容层，使已有代码仍可通过原路径访问 `Qwen3MaxLLM` 和 `Qwen3VL8BSSPULLM`。
+### 1. 完成 LLM 分层架构落地
 
-## 已完成功能
+当前 `src/integrations/llm/` 已按职责拆分为以下结构：
 
-### 1. 统一分层骨架
+- `schema/`：统一请求、响应、消息、图像输入结构
+- `capabilities/`：统一声明 provider 能力
+- `base/`：抽象 provider 接口
+- `providers/`：具体模型接入实现
+- `factory/`：按配置或显式名称创建 provider
 
-新增目录：
+这一层的目标已经从“单个模型文件可调用”切换为“统一抽象下可替换 provider”。
 
-- `src/integrations/llm/base/`
-- `src/integrations/llm/capabilities/`
-- `src/integrations/llm/schema/`
-- `src/integrations/llm/providers/qwen/`
-- `src/integrations/llm/factory/`
-- `src/services/llm/`
+### 2. 完成统一请求与响应模型
 
-### 2. 统一请求响应模型
-
-已实现：
+已实现的核心对象包括：
 
 - `LLMImageInput`
 - `LLMMessage`
@@ -36,166 +28,159 @@
 - `LLMResponse`
 - `LLMUsage`
 
-其中 `LLMRequest.from_prompts(...)` 用于将上层常见的 `system_prompt/user_prompt/image_paths` 组装为统一请求对象。
+其中 `LLMRequest.from_prompts(...)` 已支持将：
 
-### 3. 能力声明与工厂选择
+- `system_prompt`
+- `user_prompt`
+- `image_paths`
+- `temperature`
+- `max_tokens`
+- `response_format`
 
-已实现：
+统一组装为标准请求对象，供各 provider 消费。
 
-- `LLMCapabilities`
-- `LLMFactory.create(...)`
-- `get_llm_provider(...)`
+### 3. 完成两个 Qwen Provider 的统一接入
 
-当前支持：
+当前已经存在并可用的 provider：
 
-- `qwen_official`
 - `qwen_local_openai_compatible`
+- `qwen_official`
 
-并支持基于能力做前置校验，例如视觉能力、JSON 输出能力。
-
-### 4. provider 重构
-
-#### 本地 qwen3-vl
-
-将原有单体实现重构为：
+对应实现文件：
 
 - `src/integrations/llm/providers/qwen/local_openai_compatible.py`
-
-它现在负责：
-
-- 图片压缩与 base64 编码
-- OpenAI 兼容消息体拼装
-- HTTP 异步调用
-- 原始响应转为统一 `LLMResponse`
-
-#### 官方 qwen
-
-新增：
-
 - `src/integrations/llm/providers/qwen/official.py`
 
-它现在负责：
+其中：
 
-- 基于 `AsyncOpenAI` 调用官方兼容接口
-- 将响应转为统一 `LLMResponse`
+- 本地 provider 负责图片压缩、base64 编码、OpenAI 兼容消息体构造、HTTP 异步调用、响应标准化
+- 官方 provider 负责通过 `AsyncOpenAI` 调用官方兼容接口，并将响应转换成统一 `LLMResponse`
 
-### 5. services/llm 业务能力
+### 4. 完成官方 Qwen Provider 的图像输入支持
 
-新增：
+针对官方 provider 初始只支持文本消息的问题，现已补齐多模态能力：
 
-- `src/services/llm/models.py`
-- `src/services/llm/prompt_builder.py`
-- `src/services/llm/json_parser.py`
-- `src/services/llm/service.py`
+- `supports_vision` 已改为 `True`
+- `image_inputs` 会转换为兼容格式的 `messages[].content`
+- 支持 `image_url + text` 的图文混合 user message
+- 支持透传 `response_format`
+- 包装类调用已支持 `image_paths`
 
-当前已实现：
+同时增加了防御性校验：
 
-- `PromptContext` / `PromptFieldSet`：统一描述模板、字段、文件类型、页码和附加约束
-- `build_system_prompt(...)`：按提示词规范构造系统提示词
-- `build_user_prompt(...)`：按模板信息、字段集合和页码信息构造用户提示词
-- `parse_structured_output(...)`：从模型输出中提取 JSON 对象
-- `normalize_fields(...)`：过滤多余字段、补齐缺失字段、统一空值策略
-- `LLMService.build_prompts(...)`
-- `LLMService.parse_json_result(...)`
-- `LLMService.extract_structured_data(...)`
+- 当传入图片，但配置的模型名不是视觉模型时，会提前抛出清晰错误
+- 避免把纯文本模型误当成 VL 模型调用
 
-### 6. 兼容迁移
+### 5. 完成 services/llm 业务层能力落地
 
-旧路径：
+当前 `src/services/llm/` 已承担业务层职责，不再直接混入 provider 协议细节。
+
+已实现内容包括：
+
+- `PromptContext`
+- `PromptFieldSet`
+- `StructuredExtractionResult`
+- `prompt_builder.py`
+- `json_parser.py`
+- `service.py`
+
+当前已支持：
+
+- system prompt 生成
+- user prompt 生成
+- 目标字段拼装
+- fenced JSON 清洗
+- JSON 对象提取
+- 多余字段过滤
+- 缺失字段补齐
+- 结构化结果输出
+
+### 6. 完成旧兼容层清理
+
+原先为兼容迁移保留的旧路径：
 
 - `src/integrations/llm/core/model/qwen.py`
 - `src/integrations/llm/core/model/qwen3_vl_8b_sspu.py`
 
-已改为兼容导出层，避免现有调用方在本次重构后立即失效。
+现已删除，`src/integrations/llm/core/` 整个目录已清理完成。
 
-## 代码改动说明
+同时清理了仍依赖该旧路径的过时脚本：
 
-### 修改文件
+- `tests/scripts/resOCR_to_json_withLLM.py`
 
-- `.gitignore`
-- `pyproject.toml`
+清理后，仓库内已不再保留 `src.integrations.llm.core` 的引用。
+
+## 关键改动文件
+
+本阶段重点涉及以下文件：
+
 - `src/core/config.py`
-
-### 新增或重构文件
-
-- `src/integrations/llm/__init__.py`
-- `src/integrations/llm/base/__init__.py`
 - `src/integrations/llm/base/llm.py`
-- `src/integrations/llm/capabilities/__init__.py`
 - `src/integrations/llm/capabilities/llm_capabilities.py`
-- `src/integrations/llm/schema/__init__.py`
 - `src/integrations/llm/schema/message.py`
 - `src/integrations/llm/schema/request.py`
 - `src/integrations/llm/schema/response.py`
-- `src/integrations/llm/providers/__init__.py`
-- `src/integrations/llm/providers/qwen/__init__.py`
-- `src/integrations/llm/providers/qwen/official.py`
-- `src/integrations/llm/providers/qwen/local_openai_compatible.py`
-- `src/integrations/llm/factory/__init__.py`
 - `src/integrations/llm/factory/llm_factory.py`
-- `src/services/__init__.py`
-- `src/services/llm/__init__.py`
+- `src/integrations/llm/providers/qwen/local_openai_compatible.py`
+- `src/integrations/llm/providers/qwen/official.py`
 - `src/services/llm/models.py`
 - `src/services/llm/prompt_builder.py`
 - `src/services/llm/json_parser.py`
 - `src/services/llm/service.py`
-- `src/integrations/llm/core/model/qwen.py`
-- `src/integrations/llm/core/model/qwen3_vl_8b_sspu.py`
-- `tests/test_llm_architecture.py`
-- `tests/test_llm_service.py`
+- `tests/unit/test_llm_architecture.py`
+- `tests/unit/test_llm_service.py`
+
+## 已完成验证
+
+本阶段已执行并通过的验证包括：
+
+- `python -m unittest tests.unit.test_llm_architecture`
+- `python -m unittest tests.unit.test_llm_service`
+- `python -m compileall src`
+
+当前单测已覆盖：
+
+- `LLMRequest` 组装
+- `LLMFactory` 创建 provider
+- capability 校验失败路径
+- 官方 provider 多模态消息构造
+- 非视觉模型图像调用的防御性报错
+- prompt 生成
+- JSON 清洗与字段归一化
 
 ## 遇到的问题
 
-### 1. 原文件编码读取异常
+### 1. 官方 provider 初始实现只有文本能力
 
-`contexts/llm.md` 初次读取时出现终端编码错乱，后续通过 UTF-8 重新读取解决，没有影响需求判断。
+最初 `src/integrations/llm/providers/qwen/official.py` 仅支持纯文本消息，未处理 `image_inputs`，也未声明 vision 能力。该问题已修复。
 
-### 2. 现有实现职责混杂
+### 2. 旧 core 目录会干扰架构收口
 
-原 `qwen3_vl_8b_sspu.py` 同时承担配置读取、图片处理、消息拼装、HTTP 调用、响应解析和业务调用接口，不利于后续同时支持多个 provider。本次通过 provider 化拆分解决。
+虽然最初保留旧路径能减少迁移冲击，但在 provider 层稳定后，继续保留 `src/integrations/llm/core/` 会让调用入口不明确，增加维护成本，因此已整体删除。
 
-### 3. 仓库 Python 版本声明不一致
+### 3. 文档编码在当前终端下存在显示问题
 
-`AGENTS.md` 目标是 Python `3.9.25`，但仓库文件中曾出现更高版本约束。本次统一恢复到 `>=3.9,<3.10`，使约束与项目目标一致。
+原有 `docs/llm层验收文档.md` 在当前终端环境中存在乱码显示，因此本次对该文件进行了整体验收内容重写，并将阶段总结信息直接合并进来，避免重复维护两份文档。
 
-### 4. 测试目录默认忽略
+## 当前状态判断
 
-`.gitignore` 原先会拦住新增测试文件，本次补充白名单后才能纳入新的 LLM 单元测试。
+到当前为止，LLM 层已经完成了以下目标：
 
-### 5. Windows 环境下文本写入 BOM
+- 分层边界已明确
+- provider 已统一到新架构
+- 官方与本地 provider 都具备图像处理能力
+- `services/llm` 已承担 prompt 与 JSON 清洗职责
+- 旧 `core` 路径已退出仓库
 
-在当前 PowerShell 环境中，直接使用 UTF-8 写文件会引入 BOM。本次额外做了无 BOM 重写，避免影响 Python 源文件头部。
+也就是说，LLM 层已经不再是“概念设计”阶段，而是进入“可接主业务工作流”的状态。
 
-## 验证结果
+## 下一步建议
 
-本次重构完成后，已补充结构级单元测试：
+最自然的下一步是把这套 LLM 能力正式接入主工作流，包括：
 
-- `tests/test_llm_architecture.py`
-- `tests/test_llm_service.py`
+- `src/services/document/` 的文件检测与 PDF 抽图产物
+- `src/services/template/` 的模板字段与可选字段
+- `src/services/workflow/` 的主链路编排
+- `src/services/excel/` 的字段映射与填表
 
-覆盖点包括：
-
-- `LLMRequest` 组装
-- `LLMFactory` provider 创建
-- capability 校验失败路径
-- prompt 构造
-- fenced json 清洗
-- 额外字段过滤
-- 缺失字段补齐
-
-已执行验证：
-
-- `python -m unittest tests.test_llm_architecture tests.test_llm_service`
-- `python -m compileall src tests`
-
-说明：
-
-- 本次未直接执行真实模型联网调用作为自动化验收，因为这依赖本地或远程模型服务地址、密钥和网络可达性。
-- 结构上已为后续联调预留统一入口，联调时应优先验证 `qwen_local_openai_compatible` 与 `qwen_official` 两条调用链。
-
-## 后续建议
-
-- 在 `src/services/workflow/` 中接入 `PromptContext` 与 `LLMService.extract_structured_data(...)`
-- 为 `factory` 增加按能力自动筛选 provider 的更完整逻辑
-- 为本地 `qwen3-vl` provider 增加更严格的错误类型封装和超时重试策略
-- 为真实接口调用补集成测试，并区分 mock 测试与联网联调测试
+优先级上，建议先把 `workflow` 接起来，让 `PromptContext + LLMService.extract_structured_data(...)` 真正进入主流程。
