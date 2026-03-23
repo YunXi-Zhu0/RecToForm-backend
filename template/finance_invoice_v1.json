@@ -1,0 +1,128 @@
+{
+  "template_id": "finance_invoice",
+  "template_name": "财务系统录入发票字段",
+  "template_version": "v1",
+  "mapping_version": "v1",
+  "excel_template_path": "assets/finance_invoice_template_v1.xlsx",
+  "default_field_ids": [
+    "serial_no",
+    "invoice_number",
+    "invoice_code",
+    "invoice_amount",
+    "remark"
+  ],
+  "optional_field_ids": [
+    "invoice_date",
+    "seller_name",
+    "buyer_name"
+  ],
+  "field_definitions": [
+    {
+      "field_id": "serial_no",
+      "field_label": "序号",
+      "description": "Excel 内自增主键",
+      "required": true,
+      "source_hint": "system",
+      "default_value": ""
+    },
+    {
+      "field_id": "invoice_number",
+      "field_label": "发票号码",
+      "description": "发票号码",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "invoice_code",
+      "field_label": "发票代码",
+      "description": "若缺失则回填发票号码",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "invoice_amount",
+      "field_label": "发票金额",
+      "description": "对应合计金额",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "remark",
+      "field_label": "备注",
+      "description": "建议填写源文件名",
+      "required": true,
+      "source_hint": "system"
+    },
+    {
+      "field_id": "invoice_date",
+      "field_label": "开票日期",
+      "description": "发票上的开票日期",
+      "required": false,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "seller_name",
+      "field_label": "销售方",
+      "description": "销售方名称",
+      "required": false,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "buyer_name",
+      "field_label": "购买方",
+      "description": "购买方名称",
+      "required": false,
+      "source_hint": "invoice"
+    }
+  ],
+  "excel_mappings": [
+    {
+      "field_id": "serial_no",
+      "sheet_name": "Sheet1",
+      "cell": "A2",
+      "write_mode": "overwrite"
+    },
+    {
+      "field_id": "invoice_number",
+      "sheet_name": "Sheet1",
+      "cell": "B2",
+      "write_mode": "overwrite"
+    },
+    {
+      "field_id": "invoice_code",
+      "sheet_name": "Sheet1",
+      "cell": "C2",
+      "write_mode": "overwrite"
+    },
+    {
+      "field_id": "invoice_amount",
+      "sheet_name": "Sheet1",
+      "cell": "D2",
+      "write_mode": "overwrite"
+    },
+    {
+      "field_id": "remark",
+      "sheet_name": "Sheet1",
+      "cell": "E2",
+      "write_mode": "overwrite"
+    },
+    {
+      "field_id": "invoice_date",
+      "sheet_name": "Sheet1",
+      "cell": "F2",
+      "write_mode": "overwrite"
+    },
+    {
+      "field_id": "seller_name",
+      "sheet_name": "Sheet1",
+      "cell": "G2",
+      "write_mode": "overwrite"
+    },
+    {
+      "field_id": "buyer_name",
+      "sheet_name": "Sheet1",
+      "cell": "H2",
+      "write_mode": "overwrite"
+    }
+  ]
+}

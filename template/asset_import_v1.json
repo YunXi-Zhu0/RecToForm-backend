@@ -1,0 +1,210 @@
+{
+  "template_id": "asset_import",
+  "template_name": "大创低值材料资产入库模板自动导入",
+  "template_version": "v1",
+  "mapping_version": "v1",
+  "excel_template_path": "assets/asset_import_template_v1.xlsx",
+  "default_field_ids": [
+    "asset_category_code",
+    "asset_name",
+    "brand",
+    "model",
+    "unit",
+    "quantity",
+    "unit_price",
+    "total_price",
+    "supplier_name",
+    "invoice_serial_number",
+    "invoice_date",
+    "storage_location",
+    "remark"
+  ],
+  "optional_field_ids": [
+    "tax_amount",
+    "specification"
+  ],
+  "field_definitions": [
+    {
+      "field_id": "asset_category_code",
+      "field_label": "低值材料分类号",
+      "description": "根据资产名称规则推断",
+      "required": true,
+      "source_hint": "rule"
+    },
+    {
+      "field_id": "asset_name",
+      "field_label": "资产名称",
+      "description": "项目名称或商品名",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "brand",
+      "field_label": "品牌",
+      "description": "品牌",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "model",
+      "field_label": "规格型号",
+      "description": "规格型号",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "unit",
+      "field_label": "单位",
+      "description": "计量单位",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "quantity",
+      "field_label": "数量",
+      "description": "数量",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "unit_price",
+      "field_label": "单价",
+      "description": "单价",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "total_price",
+      "field_label": "总价",
+      "description": "价税合计小写",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "supplier_name",
+      "field_label": "供应商",
+      "description": "供应商名称",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "invoice_serial_number",
+      "field_label": "发票编号",
+      "description": "发票编号",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "invoice_date",
+      "field_label": "开票日期",
+      "description": "开票日期",
+      "required": true,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "storage_location",
+      "field_label": "存放地址",
+      "description": "用户补充",
+      "required": true,
+      "source_hint": "user"
+    },
+    {
+      "field_id": "remark",
+      "field_label": "备注",
+      "description": "建议填写源文件名",
+      "required": true,
+      "source_hint": "system"
+    },
+    {
+      "field_id": "tax_amount",
+      "field_label": "税额",
+      "description": "税额",
+      "required": false,
+      "source_hint": "invoice"
+    },
+    {
+      "field_id": "specification",
+      "field_label": "规格补充",
+      "description": "附加规格信息",
+      "required": false,
+      "source_hint": "invoice"
+    }
+  ],
+  "excel_mappings": [
+    {
+      "field_id": "asset_category_code",
+      "sheet_name": "Sheet1",
+      "cell": "A2"
+    },
+    {
+      "field_id": "asset_name",
+      "sheet_name": "Sheet1",
+      "cell": "B2"
+    },
+    {
+      "field_id": "brand",
+      "sheet_name": "Sheet1",
+      "cell": "C2"
+    },
+    {
+      "field_id": "model",
+      "sheet_name": "Sheet1",
+      "cell": "D2"
+    },
+    {
+      "field_id": "unit",
+      "sheet_name": "Sheet1",
+      "cell": "E2"
+    },
+    {
+      "field_id": "quantity",
+      "sheet_name": "Sheet1",
+      "cell": "F2"
+    },
+    {
+      "field_id": "unit_price",
+      "sheet_name": "Sheet1",
+      "cell": "G2"
+    },
+    {
+      "field_id": "total_price",
+      "sheet_name": "Sheet1",
+      "cell": "H2"
+    },
+    {
+      "field_id": "supplier_name",
+      "sheet_name": "Sheet1",
+      "cell": "I2"
+    },
+    {
+      "field_id": "invoice_serial_number",
+      "sheet_name": "Sheet1",
+      "cell": "J2"
+    },
+    {
+      "field_id": "invoice_date",
+      "sheet_name": "Sheet1",
+      "cell": "K2"
+    },
+    {
+      "field_id": "storage_location",
+      "sheet_name": "Sheet1",
+      "cell": "L2"
+    },
+    {
+      "field_id": "remark",
+      "sheet_name": "Sheet1",
+      "cell": "M2"
+    },
+    {
+      "field_id": "tax_amount",
+      "sheet_name": "Sheet1",
+      "cell": "N2"
+    },
+    {
+      "field_id": "specification",
+      "sheet_name": "Sheet1",
+      "cell": "O2"
+    }
+  ]
+}

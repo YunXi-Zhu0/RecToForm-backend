@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = ">=3.10"
+requires-python = ">3.10"
 
 [[package]]
 name = "annotated-types"
@@ -183,6 +183,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/eb/7d/e4a365ee45213ab7f4fd0c4063204e66755fe616e6c678530f18fe08be74/easyofd-0.5.1.tar.gz", hash = "sha256:838094c7b995bee35db0b136f835bfdbe94295d971f0b356064b2095d7cb6c9d", size = 51125, upload-time = "2025-03-27T12:16:14.976Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/22/d8/5425e1796485735a2ec6cd034fa084c2c8483398fed6c41326562b81049d/easyofd-0.5.1-py3-none-any.whl", hash = "sha256:c8a60ea317919b2216cb362df994c4a2326f9f9a996ac27080691ce79a82c84e", size = 54601, upload-time = "2025-03-27T12:16:12.977Z" },
+]
+
+[[package]]
+name = "et-xmlfile"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
 ]
 
 [[package]]
@@ -427,6 +436,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/56/87/eb0abb4ef88ddb95b3c13149384c4c288f584f3be17d6a4f63f8c3e3c226/openai-2.28.0.tar.gz", hash = "sha256:bb7fdff384d2a787fa82e8822d1dd3c02e8cf901d60f1df523b7da03cbb6d48d", size = 670334, upload-time = "2026-03-13T19:56:27.306Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c0/5a/df122348638885526e53140e9c6b0d844af7312682b3bde9587eebc28b47/openai-2.28.0-py3-none-any.whl", hash = "sha256:79aa5c45dba7fef84085701c235cf13ba88485e1ef4f8dfcedc44fc2a698fc1d", size = 1141218, upload-time = "2026-03-13T19:56:25.46Z" },
+]
+
+[[package]]
+name = "openpyxl"
+version = "3.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "et-xmlfile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32619465d2f77b29a0469500e99012523b91cc4141cd1/openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050", size = 186464, upload-time = "2024-06-28T14:03:44.161Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910, upload-time = "2024-06-28T14:03:41.161Z" },
 ]
 
 [[package]]
@@ -703,6 +724,7 @@ dependencies = [
     { name = "easyofd" },
     { name = "httpx" },
     { name = "openai" },
+    { name = "openpyxl" },
     { name = "pillow" },
     { name = "requests" },
 ]
@@ -713,6 +735,7 @@ requires-dist = [
     { name = "easyofd", specifier = "==0.5.1" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "openai", specifier = ">=2.28.0" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "requests", specifier = ">=2.32.5" },
 ]
