@@ -43,6 +43,7 @@
 - 按 `template_id + template_version` 获取模板
 - 合并默认字段与用户勾选的可选字段
 - 对目标字段集合做有序去重
+- 同时返回目标字段映射与模板全量映射，供 Excel 层控制 optional 表头显示
 - 校验字段定义是否完整
 - 校验 Excel 模板文件是否存在
 - 校验目标字段是否存在显式 Excel 映射
@@ -80,6 +81,8 @@
 - 校验映射中的 sheet 是否存在
 - 按显式映射写入字段值
 - 对缺失值统一写入空字符串
+- 在导出阶段按 `target_fields` 动态同步表头
+- 未选择的 optional 字段会清空表头和对应数据单元格
 - 复制模板并生成输出文件
 - 返回输出文件路径、实际写入字段、跳过字段、缺失映射摘要
 
@@ -99,6 +102,7 @@
 
 - 串联 `document -> template -> llm -> excel`
 - 构造 `PromptContext`
+- 将 `default_fields`、`optional_fields`、`field_definitions` 和 `all_excel_mappings` 传递给 Excel 层
 - 推进阶段状态：
   - `created`
   - `template_ready`
@@ -153,6 +157,35 @@
 
 这一步使当前实现与项目目标 Python `3.9.25` 更一致，也补齐了 Excel 层运行所需依赖声明。
 
+
+### 8. 补充前后端围绕 optional 字段的后续构建思路
+
+围绕模板中的 `optional_field_ids`，当前服务层已经具备后续前后端接入的基础约束，可按以下方式构建：
+
+- 在模板 JSON 中预先定义 `optional_field_ids`，例如 `template/finance_invoice_v1.json` 中先声明允许用户追加的可选字段
+- 前端在用户选择模板后，先请求后端模板详情接口，读取该模板的 `default_field_ids`、`optional_field_ids` 和字段展示信息
+- 前端将 `optional_field_ids` 渲染为可勾选列表，供用户决定本次任务是否追加这些字段
+- 当前端未勾选任何 optional 字段时，向后端传空列表或 `None`
+- 后端收到 `selected_optional_field_ids` 后，由 template 层合并出最终 `target_fields`
+- workflow 将 `default_fields`、用户选中的 `optional_fields`、字段定义和全量映射传递给 excel 层
+- excel 层根据本次任务的 `target_fields` 判断哪些 optional 字段需要显示表头、写入数据，哪些 optional 字段需要隐藏并清空单元格
+
+这条思路的好处是：
+
+- optional 字段能力先在模板层声明，避免前端和后端各自维护一份可选字段清单
+- 前端只负责展示和收集用户选择，不直接参与字段映射和写表规则判断
+- 后端以 `selected_optional_field_ids` 为唯一输入，统一决定 prompt 字段集合和 Excel 落表结果
+- 同一个模板可以在不改主链路代码的情况下扩展新的 optional 字段
+
+如果后续接入 API 层，建议至少提供以下接口或返回结构：
+
+- 模板列表接口：返回 `template_id`、`template_name`、`template_version`
+- 模板详情接口：返回 `default_field_ids`、`optional_field_ids`、字段标签与字段说明
+- 任务执行接口：接收 `template_id`、`template_version`、`selected_optional_field_ids` 和上传文件
+
+这样前端就可以形成稳定流程：
+
+`选择模板 -> 拉取 optional 选项 -> 用户勾选 -> 提交 selected_optional_field_ids -> 后端控制 prompt 与 Excel 表头/数据写入`
 ## 关键改动文件
 
 本阶段重点涉及以下文件：
@@ -211,6 +244,8 @@ smoke 验证结论：
 - 默认字段与可选字段合并
 - 字段顺序稳定性与去重
 - Excel 模板写入
+- 未选 optional 字段时表头隐藏
+- 选择部分 optional 字段时表头按需显示
 - 图片文件 document 解析
 - PDF 依赖缺失时的错误路径
 - workflow 成功路径
@@ -263,6 +298,7 @@ smoke 验证结论：
 - 分层边界已明确并代码化
 - 模板定义从业务代码中抽离到 JSON 配置
 - Excel 写表能力已可独立运行
+- optional 字段表头已改为按用户选择动态显示
 - workflow 已具备最小主链路能力
 - document 已具备统一输入结构与图片直通能力
 - 审计落盘机制已建立
@@ -281,3 +317,5 @@ smoke 验证结论：
 - 真实 LLM provider 下的集成测试
 
 优先级上，建议先做 API 接入与环境统一，再做 PDF 抽图依赖补齐和端到端联调。
+
+
