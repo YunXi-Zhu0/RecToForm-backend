@@ -61,9 +61,9 @@ class TemplateService:
             default_field_ids=definition.default_field_ids,
             optional_field_ids=selected_optional_ids,
         )
-        excel_mappings = self._build_mappings(
-            payload=payload,
-            definition=definition,
+        all_excel_mappings = self._build_all_mappings(payload=payload, definition=definition)
+        excel_mappings = self._select_target_mappings(
+            mappings=all_excel_mappings,
             target_fields=target_fields,
         )
         return TemplateBundle(
@@ -77,6 +77,7 @@ class TemplateService:
             optional_fields=selected_optional_ids,
             target_fields=target_fields,
             excel_mappings=excel_mappings,
+            all_excel_mappings=all_excel_mappings,
         )
 
     def merge_fields(
@@ -150,11 +151,10 @@ class TemplateService:
             definitions[field.field_id] = field
         return definitions
 
-    def _build_mappings(
+    def _build_all_mappings(
         self,
         payload: Dict[str, object],
         definition: TemplateDefinition,
-        target_fields: Iterable[str],
     ) -> Dict[str, ExcelFieldMapping]:
         mappings: Dict[str, ExcelFieldMapping] = {}
         for item in payload.get("excel_mappings", []):
@@ -168,7 +168,13 @@ class TemplateService:
                 write_mode=str(item.get("write_mode", "overwrite")),
             )
             mappings[mapping.field_id] = mapping
+        return mappings
 
+    def _select_target_mappings(
+        self,
+        mappings: Dict[str, ExcelFieldMapping],
+        target_fields: Iterable[str],
+    ) -> Dict[str, ExcelFieldMapping]:
         missing_fields = [field_id for field_id in target_fields if field_id not in mappings]
         if missing_fields:
             raise TemplateConfigError(

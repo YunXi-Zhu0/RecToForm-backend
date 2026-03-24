@@ -49,6 +49,7 @@ class TemplateBundle:
     optional_fields: List[str]
     target_fields: List[str]
     excel_mappings: Dict[str, ExcelFieldMapping]
+    all_excel_mappings: Dict[str, ExcelFieldMapping]
 
 
 @dataclass(frozen=True)

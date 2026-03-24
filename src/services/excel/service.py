@@ -3,6 +3,7 @@ from shutil import copyfile
 from typing import Iterable, Optional
 
 from openpyxl import load_workbook
+from openpyxl.utils.cell import coordinate_from_string, get_column_letter
 
 from src.core.config import DEFAULT_MISSING_VALUE, DEFAULT_OUTPUT_DIR
 from src.services.excel.models import ExcelWriteRequest, ExcelWriteResult, StructuredInvoiceData
@@ -24,6 +25,8 @@ class ExcelService:
         copyfile(request.excel_template_path, output_path)
 
         workbook = load_workbook(output_path)
+        self._sync_headers(workbook=workbook, request=request)
+
         written_fields = []
         for field_id in request.target_fields:
             mapping = request.excel_mappings.get(field_id)
@@ -34,6 +37,7 @@ class ExcelService:
             written_fields.append(field_id)
 
         workbook.save(output_path)
+        workbook.close()
         missing_mappings = [
             field_id for field_id in request.target_fields if field_id not in request.excel_mappings
         ]
@@ -62,6 +66,29 @@ class ExcelService:
             missing_fields=missing_fields,
             extra_fields=list(result.extra_fields),
         )
+
+    def _sync_headers(self, workbook, request: ExcelWriteRequest) -> None:
+        for field_id in request.default_fields + request.optional_fields:
+            mapping = request.all_excel_mappings.get(field_id)
+            definition = request.field_definitions.get(field_id)
+            if mapping is None or definition is None:
+                continue
+            header_cell = self._resolve_header_cell(mapping.cell)
+            workbook[mapping.sheet_name][header_cell] = definition.field_label
+
+        selected = set(request.target_fields)
+        for field_id, mapping in request.all_excel_mappings.items():
+            if field_id in request.default_fields or field_id in selected:
+                continue
+            header_cell = self._resolve_header_cell(mapping.cell)
+            workbook[mapping.sheet_name][header_cell] = ""
+            workbook[mapping.sheet_name][mapping.cell] = ""
+
+    def _resolve_header_cell(self, data_cell: str) -> str:
+        column_letters, row_index = coordinate_from_string(data_cell)
+        if row_index <= 1:
+            return "%s1" % column_letters
+        return "%s%s" % (column_letters, row_index - 1)
 
     def _validate_request(self, request: ExcelWriteRequest) -> None:
         if not request.excel_template_path.is_file():

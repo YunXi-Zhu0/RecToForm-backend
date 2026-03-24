@@ -4,7 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import List, Optional
 
-from src.core.config import DEFAULT_AUDIT_DIR, DEFAULT_MISSING_VALUE, DEFAULT_OUTPUT_DIR
+from src.core.config import DEFAULT_AUDIT_DIR, DEFAULT_OUTPUT_DIR
 from src.services.document import DocumentService
 from src.services.excel import ExcelService, ExcelWriteRequest, StructuredInvoiceData
 from src.services.llm import LLMService, PromptContext, PromptFieldSet
@@ -65,9 +65,8 @@ class WorkflowService:
                     default_fields=template_bundle.default_fields,
                     optional_fields=template_bundle.optional_fields,
                 ),
-                missing_value=DEFAULT_MISSING_VALUE,
                 extra_instructions=request.extra_instructions,
-                json_example={field_id: DEFAULT_MISSING_VALUE for field_id in template_bundle.target_fields},
+                json_example={field_id: "" for field_id in template_bundle.target_fields},
             )
             status_history.append(WorkflowStatus.PROMPT_READY.value)
             status_history.append(WorkflowStatus.LLM_PROCESSING.value)
@@ -91,7 +90,11 @@ class WorkflowService:
                     excel_template_path=template_bundle.excel_template_path,
                     structured_data=structured_data,
                     target_fields=template_bundle.target_fields,
+                    default_fields=template_bundle.default_fields,
+                    optional_fields=template_bundle.optional_fields,
+                    field_definitions=template_bundle.field_definitions,
                     excel_mappings=template_bundle.excel_mappings,
+                    all_excel_mappings=template_bundle.all_excel_mappings,
                     output_dir=self.output_dir / "excel",
                     output_filename="%s_%s.xlsx" % (request.task_id, template_bundle.template_id),
                 )
