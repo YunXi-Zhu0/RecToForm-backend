@@ -1,724 +1,470 @@
-# Services 分层落地规划
+# Services 分层重构规划
 
 ## 目标
 
-本文档用于整理 `src/services/` 后续落地顺序、各层职责、需要实现的功能、依赖关系，以及建议先固定的数据结构。
+本轮重构将 `src/services/` 的核心设计从“模板驱动识别字段”调整为“LLM 固定输出程序级标准 JSON，模板后置消费识别结果”。
 
-当前建议实施顺序为：
+重构后的主思路如下：
 
-1. `template`
-2. `excel`
-3. `workflow`
-4. `document`
+1. 系统预先定义一套全局稳定的标准 JSON。
+2. `LLMService` 只面向这套固定中文键输出结构化结果，避免字段漂移。
+3. 当前阶段先固定 LLM 识别契约，不提前绑定 Excel 最终表头策略。
+4. 模板层不再负责限制 LLM 本次能抽哪些字段，而是在后续阶段消费这套标准 JSON。
+5. Excel 层后续再基于这套标准 JSON 和模板映射生成输出。
 
-这个顺序的核心原因是：先稳定字段契约，再稳定 Excel 写入契约，再接主业务编排，最后补 PDF 抽图与页码审计能力。这样可以先用纯图片发票打通主链路，避免一开始就被 PDF 处理细节拖慢。
-
----
-
-## 总体原则
-
-- `template` 负责定义字段与模板，不负责 LLM 调用和 Excel 写入。
-- `excel` 负责显式字段映射与表格写入，不负责字段推断。
-- `workflow` 负责主链路编排，不负责承接各层内部实现细节。
-- `document` 负责文件识别、图像准备、PDF 抽图与页码审计，不负责模板与表格逻辑。
-- `services/llm` 继续负责 prompt 组装、模型调用、JSON 清洗与结构化结果输出。
+这次调整的目标不是弱化结构化约束，而是把“识别约束”和“展示约束”解耦。
 
 ---
 
-## 跨层先固定的核心契约
+## 新的分层原则
 
-在开始写各层代码前，建议先统一以下约束。
+### 1. `services/llm` 负责稳定输出标准 JSON
 
-### 1. 系统内部字段统一使用 `field_id`
+- LLM 输出的 key 必须固定为系统定义的中文键
+- 不允许把模板中的表头名直接作为 LLM 输出 key
+- 不允许不同模板驱动出不同命名风格的 JSON key
+- LLM 的主要职责是“识别值”，不是“定义字段名”
 
-同一个字段的标识必须在以下位置保持一致：
+### 2. `services/template` 在当前阶段先不反向约束 LLM 输出
 
-- 模板字段定义
-- LLM prompt 中的目标字段
-- LLM JSON 输出键
-- Excel 映射键
-- workflow 中间结果键
+- 模板不再决定 LLM 输出哪些 key
+- 模板后续只消费标准 JSON 并生成导出方案
+- 模板仍可保留默认模板元信息与映射资源
+- 模板不再对白名单外字段做“是否允许抽取”的强约束
 
-建议区分：
+### 3. `services/excel` 后续负责把标准 JSON 写成目标表格
 
-- `field_id`：系统内部稳定标识，用于 JSON、映射、编排、持久化
-- `field_label`：展示名称，用于界面、文档、说明
+- 当前阶段先不把 Excel 表头方案并入 LLM 契约
+- Excel 后续根据模板映射和标准 JSON 生成目标表格
+- Excel 不参与字段识别和字段合法性推断
 
-不要直接拿展示文案当唯一业务键，否则后续一旦改名，整条链路都要返工。
+### 4. `services/workflow` 负责主链路编排
 
-### 2. 模板定义独立放在 JSON 文件中
-
-模板定义不建议硬编码在 Python 模块里，建议采用配置化管理。
-
-当前建议：
-
-- 模板定义文件放在项目根目录 `template/`
-- 使用 JSON 格式
-- 每个模板可单独一个文件，或使用统一索引文件加拆分文件的方式管理
-
-这样做的目的：
-
-- 模板字段调整不必直接改业务代码
-- 后续新增模板时，不需要修改 workflow 主链路
-- 更方便做版本化管理和比对
-
-### 3. Excel 映射按模板版本管理
-
-Excel 映射不能只绑定 `template_id`，还应显式绑定 `template_version`。
-
-原因：
-
-- 同一模板名称在不同版本下，sheet、单元格、字段位置都可能变化
-- 映射配置必须和模板文件版本一一对应
-- 后续排查填表错误时，需要明确是哪个模板版本、哪个映射版本产出的结果
-
-建议至少保证以下关系可追溯：
-
-- `template_id`
-- `template_version`
-- `excel_template_path`
-- `mapping_version`
-
-### 4. 缺失值统一使用空字符串
-
-当前主链路统一约定：
-
-- 缺失值一律使用空字符串 `""`
-
-这一规则应在以下位置保持一致：
-
-- prompt 缺失值说明
-- LLM 输出约束
-- JSON 清洗后的标准结果
-- Excel 写入层默认空值策略
-
-不要在不同层混用 `null`、`None`、`未识别`、`未知` 之类值，否则后面校验和写表会变复杂。
-
-### 5. Workflow 审计结果需要持久化到文件
-
-workflow 不仅要在内存里组织中间结果，还需要把关键审计结果落盘保存。
-
-建议至少持久化：
-
-- 原始输入文件信息
-- 模板快照
-- 最终字段集合
-- prompt 上下文
-- LLM 原始文本
-- 清洗后的 JSON
-- Excel 输出路径
-- document manifest
-- 任务状态与错误信息
-
-建议优先使用文件持久化，后续如有需要再扩展到数据库。
+- `document` 输出图像与 manifest
+- `llm` 输出固定标准 JSON
+- `template` 输出导出列方案和布局
+- `excel` 负责导出结果文件
+- `workflow` 负责审计、状态推进和错误汇总
 
 ---
 
-## 推荐目录职责
+## 核心设计结论
 
-### `src/services/template/`
+### 1. 固定一套全局标准 JSON 定义
 
-负责：
+系统必须维护一套全局唯一的标准 JSON 契约，建议以独立配置或文档形式维护，例如：
 
-- 默认模板定义
-- 模板字段定义
-- 可选字段定义
-- 模板字段合并
-- 模板版本管理
-- 字段到 Excel 的映射配置管理
-- 从根目录 `template/` 读取模板 JSON
+- `template/standard_fields.json`
+- `contexts/tmp.md`
 
-不负责：
+当前已确认的标准 JSON key 为：
 
-- Excel 写入
-- LLM prompt 细节实现
-- 文件检测
-- PDF 抽图
+- `发票代码`
+- `发票号码`
+- `开票日期`
+- `购买方名称`
+- `购买方纳税人识别号`
+- `购买方地址电话`
+- `购买方开户行及账号`
+- `货物或应税劳务、服务名称`
+- `规格型号`
+- `单位`
+- `数量`
+- `单价`
+- `金额`
+- `税率`
+- `税额`
+- `合计`
+- `价税合计(大写)`
+- `销售方名称`
+- `销售方纳税人识别号`
+- `销售方地址电话`
+- `销售方开户行及账号`
+- `收款人`
+- `复核`
+- `开票人`
+- `销售方`
+- `备注`
 
-### `src/services/excel/`
+其中：
 
-负责：
+- 这些中文键本身就是当前阶段的程序级稳定 key
+- `LLMService` 必须严格按这些 key 返回 JSON
+- 模板表头、Excel 字段名、前端展示名暂时都不能反向影响这些 key
 
-- 加载 Excel 模板
-- 根据显式映射写入字段
-- 保存输出文件
-- 返回输出结果与写入摘要
+### 2. 模板从“识别字段定义”降级为“展示方案定义”
 
-不负责：
+模板文件不再维护：
 
-- 模板字段定义
-- 业务字段推断
-- 文件识别
-- 主流程编排
-
-### `src/services/workflow/`
-
-负责：
-
-- 串联 `template / llm / excel / document`
-- 组装 `PromptContext`
-- 管理阶段状态
-- 汇总中间结果和最终结果
-- 将审计结果持久化到文件
-
-不负责：
-
-- 直接处理 provider 协议
-- 直接写 Excel 单元格
-- 直接做 PDF 抽图
-
-### `src/services/document/`
-
-负责：
-
-- 文件类型识别
-- 图片文件直通
-- PDF 抽图
-- 图像顺序与页码映射
-- 输出图像清单与 manifest
-
-不负责：
-
-- 模板字段处理
-- LLM prompt 构造
-- Excel 写入
-
----
-
-## 分层实施顺序
-
-## 第一阶段：`template`
-
-### 本阶段目标
-
-先稳定“系统到底抽哪些字段、这些字段如何组织、Excel 需要怎样的映射”这套业务契约。
-
-### 建议优先实现的功能
-
-1. 定义模板 JSON 结构
-2. 定义字段 JSON 结构
-3. 定义默认字段与可选字段
-4. 定义模板版本与映射版本
-5. 实现模板加载与查询
-6. 实现默认字段与用户勾选字段的合并
-7. 输出给 LLM 和 Excel 共同消费的字段集合
-8. 产出字段到 Excel 的映射配置
-
-### 已知默认模板必填字段
-
-当前已在 `contexts/tmp.md` 中明确了两个默认模板的必填字段，后续应将其整理进根目录 `template/` 的 JSON 定义中。
-
-#### 默认模板 1：财务系统录入发票字段
-
-建议至少包含以下必填字段：
-
-- `serial_no`
-- `invoice_number`
-- `invoice_code`
-- `invoice_amount`
-- `remark`
-
-补充约束：
-
-- `serial_no` 为 Excel 内自增主键，不依赖发票识别结果
-- `invoice_code` 若发票中不存在，则回填 `invoice_number`
-- `invoice_amount` 对应发票中的“合计”类金额
-- `remark` 建议填写对应源文件名
-
-#### 默认模板 2：大创低值材料资产入库模板自动导入
-
-建议至少包含以下必填字段：
-
-- `asset_category_code`
-- `asset_name`
-- `brand`
-- `model`
-- `unit`
-- `quantity`
-- `unit_price`
-- `total_price`
-- `supplier_name`
-- `invoice_serial_number`
-- `invoice_date`
-- `storage_location`
-- `remark`
-
-补充约束：
-
-- `asset_category_code` 需要根据资产名称进行规则推断
-- `asset_name` 来自发票中的项目名称或商品名
-- `total_price` 对应价税合计小写
-- `storage_location` 由用户自行填写，不应依赖发票识别
-- `remark` 建议填写对应源文件名
-
-### 本阶段需要的数据结构
-
-#### `TemplateFieldDefinition`
-
-建议字段：
-
-- `field_id`
-- `field_label`
-- `description`
-- `required`
-- `example_value`
-- `value_type`
-- `source_hint`
-- `default_value`
-
-说明：
-
-- `field_id` 是内部稳定标识
-- `field_label` 用于前端展示或文档说明
-- `source_hint` 可描述“来源于发票识别”或“来源于用户补充”
-- `default_value` 用于像缺失值、固定补位值这类规则
-
-#### `TemplateDefinition`
-
-建议字段：
-
-- `template_id`
-- `template_name`
-- `template_version`
-- `mapping_version`
-- `excel_template_path`
 - `default_field_ids`
 - `optional_field_ids`
 
-#### `ExcelFieldMapping`
-
-建议字段：
-
-- `template_id`
-- `template_version`
-- `mapping_version`
-- `field_id`
-- `sheet_name`
-- `cell`
-- `write_mode`
-
-说明：
-
-- `write_mode` 初期可只支持简单覆盖写入
-- 映射必须和模板版本一起管理
-
-#### `TemplateBundle`
-
-这是 template 层最重要的产物，建议直接作为后续 `excel` 和 `workflow` 的输入。
-
-建议字段：
+模板文件改为维护：
 
 - `template_id`
 - `template_name`
 - `template_version`
 - `mapping_version`
 - `excel_template_path`
-- `field_definitions`
-- `default_fields`
-- `optional_fields`
-- `target_fields`
+- `recommended_field_ids`
+- `default_header_labels`
 - `excel_mappings`
 
 说明：
 
-- `target_fields` 是本次任务最终字段集合
-- `default_fields` 和 `optional_fields` 继续保留，便于构造 `PromptFieldSet`
+- `recommended_field_ids` 是该模板默认建议展示的字段集合
+- `default_header_labels` 是模板级表头名覆盖
+- `excel_mappings` 仍然负责 `field_id -> sheet/cell`
 
-### 对下游的产出
+如果后续还需要区分“默认展示字段”和“可扩展字段”，建议使用：
 
-template 层完成后，下游至少应能拿到：
+- `default_selected_field_ids`
+- `available_field_ids`
 
-- 模板元信息
-- 最终字段集合
-- 字段定义说明
-- Excel 映射配置
+但它们只用于展示选择，不再用于限制 LLM 输出字段合法性。
 
-### 验收标准
+### 3. 当前阶段先固定识别契约，再处理用户选列
 
-- 能列出系统支持的模板
-- 能基于模板 ID 获取指定版本模板定义
-- 能将默认字段与用户勾选字段合并为稳定、有序、去重的目标字段集合
-- 能拿到字段到 Excel 的显式映射
+当前阶段优先级如下：
+
+1. 先固定 LLM 层输出这组中文键。
+2. 先移除“模板 optional 白名单决定识别字段”的思路。
+3. `selected_field_ids`、模板推荐列、表头覆盖策略作为下一阶段能力接入。
+
+### 4. 表头与导出策略属于后续阶段
+
+在当前文档版本中，表头覆盖、模板推荐列、Excel 导出列优先级均属于后续设计，不应回写到 LLM 标准 JSON 契约中。
+
+当前已确认的 Excel 输出侧默认表头预置方案如下：
+
+#### 模板1：财务系统录入发票字段
+
+- `序号`
+- `发票号码`
+- `发票代码`
+- `发票金额`
+- `备注`
+
+#### 模板2：大创低值材料资产入库模板自动导入
+
+- `低值材料分类号`
+- `资产名称`
+- `品牌`
+- `规格型号`
+- `单位`
+- `数量`
+- `单价`
+- `总价`
+- `供应商`
+- `发票编号`
+- `开票日期`
+- `存放地址`
+- `备注`
+
+这些字段属于 Excel 输出侧供用户选择的默认表头集合，不参与 LLM 固定中文键的定义。
+
+### 5. LLM 输出仍应受控，不建议输出“自由字段”
+
+这次重构不是让 LLM 返回任意原始字段名，而是让它严格输出上面这组固定中文键。
+
+当前阶段建议：
+
+- prompt 明确要求输出完整标准 JSON
+- JSON key 必须与标准契约逐字一致
+- 缺失值填空字符串
+- 不因模板不同改变 key 集合
+
+当前阶段的核心不是压缩字段集合，而是先把程序内部识别契约固定下来。
 
 ---
 
-## 第二阶段：`excel`
+## 分层改造方案
 
-### 本阶段目标
+## 第一阶段：标准字段层
 
-在 template 层提供稳定字段结构后，实现一套只依赖结构化结果和映射配置的 Excel 写入能力。
+### 目标
 
-### 建议优先实现的功能
+先固化系统唯一认可的标准 JSON，作为 LLM 输出的统一契约。
 
-1. 读取 Excel 模板文件
-2. 校验映射配置是否合法
-3. 按映射写入结构化字段
-4. 对缺失值统一写入空字符串
-5. 保留模板原有结构并生成输出文件
-6. 返回输出文件信息和写入摘要
+### 需要落地的内容
 
-### 本阶段需要的数据结构
+1. 新增全局标准 JSON 配置文件
+2. 定义标准 JSON 数据模型
+3. 增加标准 JSON 加载与校验服务
+4. 固定并校验所有中文 key
 
-#### `StructuredInvoiceData`
+### 建议数据结构
 
-建议字段：
+#### `StandardJsonSchema`
+
+- `keys: List[str]`
+- `required_keys: List[str]`
+- `default_missing_value`
+- `version`
+
+### 产出
+
+- 可被 `llm`、`template`、`excel`、`workflow` 共同使用的标准 JSON 契约定义
+
+### 验收标准
+
+- 能加载标准 JSON 配置文件
+- 能校验中文 key 是否唯一且完整
+- LLM 输出可按这组中文 key 完成补空和清洗
+- 不存在重复或缺失的标准 key
+
+---
+
+## 第二阶段：模板层重构
+
+### 目标
+
+将模板层从“识别字段约束层”重构为“导出展示方案层”。
+
+### 需要移除或弱化的旧职责
+
+- 移除模板对白名单外 optional 字段的识别限制
+- 不再使用 `selected_optional_field_ids` 作为主要导出输入
+- 不再以模板字段集合决定 LLM 输出字段 key
+
+### 需要新增的能力
+
+1. 读取模板推荐列方案
+2. 读取模板默认表头名
+3. 基于标准字段校验模板引用是否合法
+4. 根据用户的 `selected_field_ids` 构造最终导出字段列表
+5. 输出 Excel 所需映射和表头策略
+
+### 建议数据结构
+
+#### `TemplateDefinition`
+
+- `template_id`
+- `template_name`
+- `template_version`
+- `mapping_version`
+- `excel_template_path`
+- `recommended_field_ids`
+- `available_field_ids`
+- `default_header_labels`
+
+#### `TemplateBundle`
+
+- `template_id`
+- `template_name`
+- `template_version`
+- `mapping_version`
+- `excel_template_path`
+- `recommended_fields`
+- `selected_fields`
+- `field_definitions`
+- `resolved_header_labels`
+- `excel_mappings`
+- `all_excel_mappings`
+
+### 行为规则
+
+- `selected_fields` 来自用户传入或模板推荐值
+- `resolved_header_labels` 按“用户覆盖 > 模板默认 > 标准字段默认”计算
+- 模板引用的字段必须全部存在于标准字段字典中
+- 模板映射只校验自身使用到的字段，不再承担 LLM 字段合法性白名单职责
+
+### 验收标准
+
+- 能列出系统模板
+- 能按模板读取推荐列方案
+- 能校验模板引用字段均存在于标准字段字典
+- 能根据 `selected_field_ids` 生成稳定有序去重后的导出字段列表
+- 不再因为字段不属于模板 optional 列表而报旧式错误
+
+---
+
+## 第三阶段：LLM 层重构
+
+### 目标
+
+让 `LLMService` 输出基于固定中文键的稳定 JSON，并保留足够的原始响应审计信息。
+
+### 需要调整的内容
+
+1. `PromptContext` 不再依赖模板 default/optional 字段语义
+2. prompt 直接要求模型返回固定中文键 JSON
+3. JSON 解析器只面向这组中文键做标准化
+4. 保留模型原始文本与清洗后的 JSON
+
+### 建议数据结构
+
+#### `StructuredExtractionResult`
 
 - `data`
-- `missing_fields`
+- `raw_text`
+- `cleaned_text`
 - `extra_fields`
+- `missing_fields`
 
-说明：
+这里的 `data` 必须是固定中文键对应的值。
 
-- 可以直接兼容 `src/services/llm/models.py` 中的 `StructuredExtractionResult`
-- 进入 Excel 层前，应保证缺失字段已经统一标准化为空字符串
+### 行为规则
+
+- system prompt 中明确要求只输出固定中文键
+- user prompt 中明确要求输出完整标准 JSON
+- 如果模型返回额外字段，保留在 `extra_fields` 中用于审计
+- 如果模型漏字段，则统一补空字符串
+
+### 验收标准
+
+- prompt 中不再出现模板 optional 字段语义
+- LLM 解析结果 key 必须与标准中文键逐字一致
+- 额外字段会被识别并记录，但不会破坏标准结果
+- 缺失字段统一标准化为空字符串
+
+---
+
+## 第四阶段：Excel 层重构
+
+### 目标
+
+Excel 层只消费标准字段结果、字段选择结果和表头覆盖策略，生成最终文件。
+
+### 需要调整的内容
+
+1. `ExcelWriteRequest` 改为接收 `selected_field_ids`
+2. 支持 `header_label_overrides`
+3. 支持解析后的 `resolved_header_labels`
+4. 不再依赖模板 default/optional 二分法做表头控制
+
+### 建议数据结构
 
 #### `ExcelWriteRequest`
-
-建议字段：
 
 - `template_id`
 - `template_version`
 - `mapping_version`
 - `excel_template_path`
 - `structured_data`
-- `target_fields`
+- `selected_field_ids`
+- `resolved_header_labels`
 - `excel_mappings`
+- `all_excel_mappings`
 - `output_dir`
+- `output_filename`
 
-#### `ExcelWriteResult`
+### 行为规则
 
-建议字段：
-
-- `output_file_path`
-- `written_fields`
-- `skipped_fields`
-- `missing_mappings`
-
-### 对上游的输入要求
-
-excel 层只应要求上游提供：
-
-- 最终字段集合
-- 字段写入映射
-- 结构化结果
-- 模板文件路径
-
-### 对下游的产出
-
-- 生成后的 Excel 文件路径
-- 本次实际写入摘要
+- 只为 `selected_field_ids` 写表头和数据
+- 未选字段清空表头与数据单元格
+- 表头按 `resolved_header_labels[field_id]` 写入
+- 数据值来自标准字段 JSON
 
 ### 验收标准
 
-- 能用一份 mock 结构化数据写入默认模板
-- 缺字段时按空字符串写入
-- 映射缺失时能给出明确错误或跳过摘要
+- 能按用户选择字段导出 Excel
+- 能按用户自定义表头写表头
+- 未覆盖时可回退到模板默认表头
+- 未被选择的字段不会出现在导出结果中
 
 ---
 
-## 第三阶段：`workflow`
+## 第五阶段：Workflow 层重构
 
-### 本阶段目标
+### 目标
 
-把已经稳定的 `template`、现有的 `llm`、以及 `excel` 串起来，先打通“图片输入 -> 字段提取 -> Excel 输出”的主链路。
+将主链路输入切换为“标准字段选择 + 表头覆盖”，统一驱动识别与导出。
 
-在这一阶段，`document` 可以先用最小实现替代，只支持图片直通。
-
-### 建议优先实现的功能
-
-1. 定义 workflow 请求与结果对象
-2. 定义 workflow 状态流转
-3. 接入 template，获取 `TemplateBundle`
-4. 将图片输入组装为 `PromptContext`
-5. 调用 `LLMService.extract_structured_data(...)`
-6. 对缺失字段统一补空字符串
-7. 调用 excel 层生成输出文件
-8. 汇总中间结果与最终结果
-9. 将审计结果持久化到文件
-10. 统一错误处理与阶段失败信息
-
-### 本阶段建议依赖现有 LLM 接口
-
-已存在的核心对象：
-
-- `PromptFieldSet`
-- `PromptContext`
-- `StructuredExtractionResult`
-- `LLMService`
-
-workflow 的职责不是重写这些对象，而是负责把 template 和 document 的产物整理成它们需要的输入。
-
-### 本阶段需要的数据结构
+### 建议请求结构
 
 #### `WorkflowRequest`
-
-建议字段：
 
 - `task_id`
 - `input_file_path`
 - `template_id`
 - `template_version`
-- `selected_optional_field_ids`
+- `selected_field_ids`
+- `header_label_overrides`
+- `extra_instructions`
 
-说明：
+### 新的主链路
 
-- 缺失值策略已经统一为全局空字符串，不建议在 request 里再单独传 `missing_value`
+1. `document` 解析文件并输出图像与 manifest
+2. `template` 加载模板推荐列方案和布局
+3. `workflow` 计算本次最终 `selected_field_ids`
+4. `workflow` 构造面向标准字段的 `PromptContext`
+5. `llm` 输出标准字段 JSON
+6. `excel` 根据 `selected_field_ids` 和 `resolved_header_labels` 导出
+7. `workflow` 落审计文件
 
-#### `WorkflowAuditRecord`
+### 审计文件建议补充
 
-建议字段：
-
-- `task_id`
-- `template_snapshot`
-- `target_fields`
-- `prompt_context`
-- `llm_raw_text`
-- `llm_cleaned_json`
-- `excel_output_path`
-- `document_manifest`
-- `status_history`
-- `error_info`
-
-说明：
-
-- 审计记录需要持久化到文件
-- 即使在当前阶段 `document_manifest` 还比较简单，也建议先保留字段
-
-#### `WorkflowResult`
-
-建议字段：
-
-- `task_id`
-- `status`
-- `structured_data`
-- `excel_output_path`
-- `audit_file_path`
-
-#### `WorkflowStatus`
-
-建议先至少包含：
-
-- `created`
-- `template_ready`
-- `prompt_ready`
-- `llm_processing`
-- `json_validated`
-- `excel_generating`
-- `audit_persisted`
-- `succeeded`
-- `failed`
-
-### 审计文件建议内容
-
-建议 workflow 每次执行后在固定目录下生成审计文件，例如：
-
-- `task_id`
-- 输入文件路径与文件名
-- 模板 ID / 模板版本 / 映射版本
-- 最终字段集合
-- prompt 上下文摘要
-- LLM 原始返回
-- 清洗后的结构化 JSON
-- Excel 输出路径
-- document manifest
-- 错误栈或失败阶段
-- 时间戳
-
-### 本阶段最小可行链路
-
-建议先实现这条最小主链路：
-
-1. 输入图片文件路径
-2. 选择模板
-3. 合并字段
-4. 组装 `PromptContext`
-5. 调用 `LLMService.extract_structured_data(...)`
-6. 将缺失字段标准化为空字符串
-7. 把结果写入 Excel
-8. 持久化审计文件
-9. 返回结构化数据与 Excel 输出路径
+- `selected_field_ids`
+- `resolved_header_labels`
+- `standard_field_version` 或字段字典快照
 
 ### 验收标准
 
-- 能基于图片发票完整跑通一次主链路
-- 能返回结构化字段结果
-- 能生成 Excel 文件
-- 能把审计结果落盘
-- 出错时能定位失败阶段
+- 主链路可基于 `selected_field_ids` 跑通
+- 不再依赖 `selected_optional_field_ids`
+- 审计文件可回溯本次识别字段和表头策略
+- 失败时仍能保留已完成阶段与错误信息
 
 ---
 
-## 第四阶段：`document`
+## 迁移顺序建议
 
-### 本阶段目标
+建议按以下顺序推进：
 
-在 workflow 已经支持图片主链路后，再补完整的文件预处理能力，让 workflow 不再只接收图片，而是统一接受图片和 PDF。
+1. 新增标准字段配置与注册表
+2. 重构模板 JSON 结构
+3. 调整 `TemplateService`
+4. 调整 `PromptContext` 与 `LLMService`
+5. 调整 `ExcelWriteRequest` 与 `ExcelService`
+6. 调整 `WorkflowRequest` 与 `WorkflowService`
+7. 调整测试与验收文档
 
-### 建议优先实现的功能
+原因：
 
-1. 文件类型识别
-2. 图片文件直通
-3. PDF 抽图或 PDF 转页图
-4. 生成图像路径列表
-5. 生成页码与图像的一一对应 manifest
-6. 输出统一的 document 结果对象
-7. 将结果接入 workflow，替代原来的图片直通 stub
-
-### 本阶段需要的数据结构
-
-#### `UploadedFileMeta`
-
-建议字段：
-
-- `file_name`
-- `file_path`
-- `content_type`
-- `size`
-
-#### `PageImageItem`
-
-建议字段：
-
-- `page_index`
-- `image_path`
-- `source_type`
-
-说明：
-
-- `source_type` 可标识来自原始图片还是 PDF 页面抽图
-
-#### `DocumentManifest`
-
-建议字段：
-
-- `source_file_path`
-- `file_type`
-- `page_images`
-
-#### `DocumentParseResult`
-
-建议字段：
-
-- `file_type`
-- `image_paths`
-- `page_indices`
-- `manifest`
-
-说明：
-
-- `image_paths` 直接供 LLM 调用使用
-- `page_indices` 直接供 `PromptContext` 使用
-- `manifest` 用于审计与回溯
-
-### 与 workflow 的衔接方式
-
-workflow 后续只依赖：
-
-- `image_paths`
-- `page_indices`
-- `manifest`
-
-它不需要关心 PDF 是如何抽图的，也不需要关心底层使用哪种库。
-
-### 验收标准
-
-- 能识别图片文件与 PDF 文件
-- 图片文件能按统一结构返回
-- PDF 能返回稳定顺序的图像列表
-- manifest 能追踪图像与页码对应关系
+- 先定字段契约，后改模板
+- 先定模板输出契约，后改 LLM 和 Excel 消费方式
+- 最后再切 workflow，避免中途主链路长期不可用
 
 ---
 
-## 推荐的跨层数据流
+## 兼容性与风险
 
-建议最终主链路数据流如下：
+### 1. 兼容旧模板文件
 
-1. `document` 输出 `DocumentParseResult`
-2. `template` 输出 `TemplateBundle`
-3. `workflow` 基于两者组装 `PromptContext`
-4. `services/llm` 输出 `StructuredExtractionResult`
-5. `excel` 消费结构化结果与映射配置，输出 `ExcelWriteResult`
-6. `workflow` 持久化审计文件并汇总为 `WorkflowResult`
+如果需要平滑迁移，可短期兼容旧字段：
 
----
+- `default_field_ids`
+- `optional_field_ids`
 
-## 每层的先后依赖关系
+但应明确这是临时兼容，不应继续扩展旧模型。
 
-### 可以先做 `template`
+### 2. LLM 输出字段过多的风险
 
-因为它决定字段契约，是整个系统的业务基础。
+如果一次请求字段过多，模型稳定性会下降。当前建议优先采用：
 
-### `excel` 必须在 `template` 之后
+- 识别字段 = 当前用户选择字段 + 必要公共字段
 
-因为 Excel 写入依赖：
+而不是一次性全量抽所有标准字段。
 
-- 最终字段集合
-- 字段到单元格的映射
-- 模板版本与映射版本
+### 3. 用户完全自由改表头不等于自由改字段
 
-### `workflow` 适合在 `template` 和 `excel` 之后
-
-因为它要消费：
-
-- 模板字段结构
-- Excel 输出能力
-- 现有 LLM 能力
-- 审计持久化规则
-
-### `document` 可以放最后
-
-因为主链路早期可以先使用图片发票测试。等 workflow 跑通后，再把 `document` 统一接进来，替换图片直通实现。
+用户可以改表头名，但不能改底层 `field_id` 语义。否则会重新引入字段漂移。
 
 ---
 
-## 建议优先补的测试
+## 本轮重构完成后的预期结果
 
-### `template`
+完成后系统应达到以下状态：
 
-- 模板查询测试
-- 模板版本查询测试
-- 字段合并测试
-- 去重与顺序稳定性测试
-- 映射完整性测试
-
-### `excel`
-
-- 基于 mock 结构化结果的写入测试
-- 空字符串缺失值写入测试
-- 缺映射处理测试
-
-### `workflow`
-
-- 图片主链路集成测试
-- LLM 返回缺字段时的标准化结果测试
-- Excel 输出成功测试
-- 审计文件落盘测试
-- 阶段失败测试
-
-### `document`
-
-- 图片文件识别测试
-- PDF 文件识别测试
-- 页码顺序测试
-- manifest 生成测试
-
----
-
-## 当前阶段最值得先锁定的内容
-
-在正式开始写 `template` 代码前，建议先最终确认以下内容：
-
-- 系统内部字段统一使用 `field_id`
-- 模板定义单独写在根目录 `template/` 下的 JSON 文件中
-- Excel 映射按 `template_version` 和 `mapping_version` 管理
-- 两个默认模板的必填字段以 `contexts/tmp.md` 为准，并整理进模板 JSON
-- 缺失值默认策略统一为空字符串
-- workflow 审计结果需要持久化到文件
-
-这些问题一旦先定下来，后续四层实现会顺很多。
+- 字段 key 稳定，模板变化不影响 LLM 输出结构
+- 用户选择列时不再受模板 optional 白名单限制
+- 模板只负责常用展示方案和默认表头
+- Excel 导出逻辑更直接，职责更清晰
+- workflow 审计可明确区分“识别字段选择”和“表头展示策略”
 
 ---
 
 ## 一句话结论
 
-按 `template -> excel -> workflow -> document` 的顺序推进是合理的。你这次补充的信息实际上已经把当前阶段最关键的跨层契约补齐了，下一步可以直接进入 `template` 层的数据模型和 JSON 结构设计。
+本轮 services 层重构应以“LLM 固定输出程序级标准 JSON”为第一优先级推进，模板消费和 Excel 展示策略放在后续阶段逐步接入。

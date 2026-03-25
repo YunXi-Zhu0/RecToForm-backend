@@ -1,321 +1,294 @@
-﻿# Services层验收文档
+# Services层验收文档
+
+## 验收目标
+
+本文档用于验收 `src/services/` 按“LLM 固定输出程序级标准 JSON”方案完成重构后的结果。
+
+本次验收不再以旧的 `selected_optional_field_ids` 机制为中心，而是以以下核心能力为中心：
+
+- 全局标准 JSON 定义稳定
+- LLM 输出固定中文键 JSON
+- 模板不再反向决定 LLM 输出 key
+- Workflow 能围绕这套 JSON 跑通识别与审计
+
+---
 
 ## 验收范围
 
-本文档用于汇总当前分支内 `src/services/` 相关服务层的实施落地结果，覆盖以下四层：
+覆盖以下服务层模块：
 
 - `src/services/template/`
 - `src/services/excel/`
 - `src/services/workflow/`
 - `src/services/document/`
+- `src/services/llm/`
 
-同时记录本阶段新增的模板配置、最小模板资源、验证方式与当前遗留限制。
+同时覆盖以下配置与资源：
 
-## 已完成内容
+- 全局标准字段配置
+- 模板 JSON 配置
+- Excel 模板资源
+- 审计文件输出
 
-### 1. 完成 services 四层目录落地
+---
 
-当前 `src/services/` 已形成如下结构：
+## 一、标准字段层验收
 
-- `template/`：模板定义、字段定义、字段合并、Excel 映射加载
-- `excel/`：Excel 模板校验、字段写入、输出文件生成
-- `workflow/`：主链路编排、状态推进、审计落盘、错误汇总
-- `document/`：文件类型识别、图片直通、PDF 可选抽图、manifest 输出
-- `llm/`：继续承接 prompt 组装、结构化结果清洗与模型调用
+### 验收目标
 
-这意味着 `services.md` 中要求的服务层边界已经从规划状态进入可执行状态。
+系统存在一套全局唯一的标准 JSON 契约，作为 LLM 输出和 workflow 审计的统一基础。
 
-### 2. 完成 template 层契约实现
+### 必须满足的验收项
 
-当前 `src/services/template/` 已实现：
+1. 存在独立的标准 JSON 配置来源。
+2. 标准 JSON key 固定为中文键。
+3. 标准 JSON 配置可被服务层统一加载。
+4. 对重复 key、缺失 key、非法 key 能给出明确错误。
+5. 契约中包含以下 key：
+   `发票代码`、`发票号码`、`开票日期`、`购买方名称`、`购买方纳税人识别号`、`购买方地址电话`、`购买方开户行及账号`、`货物或应税劳务、服务名称`、`规格型号`、`单位`、`数量`、`单价`、`金额`、`税率`、`税额`、`合计`、`价税合计(大写)`、`销售方名称`、`销售方纳税人识别号`、`销售方地址电话`、`销售方开户行及账号`、`收款人`、`复核`、`开票人`、`销售方`、`备注`。
 
-- `TemplateFieldDefinition`
-- `TemplateDefinition`
-- `ExcelFieldMapping`
-- `TemplateBundle`
-- `TemplateSummary`
-- `TemplateService`
+### 验收方法
 
-已支持能力包括：
+- 加载标准 JSON 配置
+- 执行标准 JSON 契约初始化
+- 断言重复 key 和缺失 key 会触发错误
+- 断言合法 key 可被统一查询和校验
 
-- 从根目录 `template/` 读取 JSON 模板定义
-- 读取模板索引并列出系统支持的模板
-- 按 `template_id + template_version` 获取模板
-- 合并默认字段与用户勾选的可选字段
-- 对目标字段集合做有序去重
-- 同时返回目标字段映射与模板全量映射，供 Excel 层控制 optional 表头显示
-- 校验字段定义是否完整
-- 校验 Excel 模板文件是否存在
-- 校验目标字段是否存在显式 Excel 映射
+### 通过标准
 
-### 3. 完成模板配置与最小模板资源落地
+- 标准 JSON 配置可稳定加载
+- 中文 key 查询和校验逻辑通过
+- LLM 输出可基于标准 JSON 契约完成补空和清洗
 
-本阶段已新增模板配置目录与资源：
+---
 
-- `template/index.json`
-- `template/finance_invoice_v1.json`
-- `template/asset_import_v1.json`
-- `template/assets/finance_invoice_template_v1.xlsx`
-- `template/assets/asset_import_template_v1.xlsx`
+## 二、Template层验收
 
-其中已整理并固化两个默认模板：
+### 验收目标
 
-- `finance_invoice`
-- `asset_import`
+模板层不再承担 LLM 输出字段白名单职责。
 
-对应字段集合、模板版本、映射版本、Excel 路径和字段单元格映射均已进入 JSON 配置，不再散落在业务代码中。
+### 必须满足的验收项
 
-### 4. 完成 excel 层写表能力落地
+1. 模板配置可按 `template_id + template_version` 读取。
+2. 模板不会反向修改或裁剪 LLM 固定中文键集合。
+3. 模板若引用识别结果字段，其引用来源必须来自标准 JSON 契约。
+4. 不再依赖 `optional_field_ids` 作为 LLM 输出前置条件。
 
-当前 `src/services/excel/` 已实现：
+### 验收方法
 
-- `StructuredInvoiceData`
-- `ExcelWriteRequest`
-- `ExcelWriteResult`
-- `ExcelService`
+- 查询模板列表
+- 读取单个模板详情
+- 校验模板不会影响 LLM 固定中文键集合
+- 校验模板字段引用来源均属于标准 JSON 契约
 
-已支持能力包括：
+### 通过标准
 
-- 读取 Excel 模板文件
-- 校验模板文件存在性
-- 校验映射中的 sheet 是否存在
-- 按显式映射写入字段值
-- 对缺失值统一写入空字符串
-- 在导出阶段按 `target_fields` 动态同步表头
-- 未选择的 optional 字段会清空表头和对应数据单元格
-- 复制模板并生成输出文件
-- 返回输出文件路径、实际写入字段、跳过字段、缺失映射摘要
+- 模板层不会再决定 LLM 输出 key
+- 旧式“字段不在模板 optional 白名单中即失败”的行为已移除
 
-这部分实现保持了“Excel 层不负责字段推断，只消费结构化结果和映射配置”的分层原则。
+---
 
-### 5. 完成 workflow 层主链路编排落地
+## 三、LLM层验收
 
-当前 `src/services/workflow/` 已实现：
+### 验收目标
 
-- `WorkflowStatus`
-- `WorkflowRequest`
-- `WorkflowAuditRecord`
-- `WorkflowResult`
-- `WorkflowService`
+LLM 层能够围绕固定中文键集合构造 prompt，并输出稳定的标准 JSON。
 
-已支持能力包括：
+### 必须满足的验收项
 
-- 串联 `document -> template -> llm -> excel`
-- 构造 `PromptContext`
-- 将 `default_fields`、`optional_fields`、`field_definitions` 和 `all_excel_mappings` 传递给 Excel 层
-- 推进阶段状态：
-  - `created`
-  - `template_ready`
-  - `prompt_ready`
-  - `llm_processing`
-  - `json_validated`
-  - `excel_generating`
-  - `audit_persisted`
-  - `succeeded`
-  - `failed`
-- 将审计结果持久化到 JSON 文件
-- 在失败时保留阶段信息、错误类型、错误消息和 traceback
+1. `PromptContext` 不再依赖模板 optional 语义。
+2. system prompt 明确要求只输出固定中文键。
+3. user prompt 明确要求输出完整标准 JSON。
+4. JSON 解析器可把返回结果标准化为固定 `中文键 -> value` 结构。
+5. 模型多返回的字段会被记录为 `extra_fields`，但不会破坏主结果。
+6. 缺失字段会统一标准化为空字符串。
 
-当前 workflow 已满足最小可行主链路：
+### 验收方法
 
-`图片输入 -> 模板字段合并 -> PromptContext -> LLMService.extract_structured_data(...) -> Excel 输出 -> 审计落盘`
+- 用 mock LLM 输出包含合法字段、缺失字段和额外字段的 JSON
+- 验证清洗结果中的 `data` 只包含标准 JSON 契约中的中文键
+- 验证缺失字段被补空
+- 验证多余字段被记录到 `extra_fields`
+- 检查 prompt 文本中不再依赖模板 optional 字段术语
 
-### 6. 完成 document 层统一输入结果实现
+### 通过标准
 
-当前 `src/services/document/` 已实现：
+- LLM 结构化输出 key 稳定且与标准中文键逐字一致
+- 缺失字段与额外字段的处理行为符合设计
+- Prompt 与标准 JSON 契约一致
 
-- `UploadedFileMeta`
-- `PageImageItem`
-- `DocumentManifest`
-- `DocumentParseResult`
-- `DocumentService`
-
-已支持能力包括：
+---
 
-- 文件类型识别
-- 图片文件直通
-- 图片输入校验
-- 生成统一的 `manifest`
-- 输出 `image_paths`、`page_indices`、`manifest`
-- PDF 文件走可选渲染后端抽图
+## 四、Excel层验收
 
-当前 PDF 抽图后端按优先顺序支持：
+### 验收目标
 
-- `PyMuPDF`（`fitz`）
-- `pypdfium2`
+Excel 层属于后续验收范围，本阶段不以 Excel 表头策略为主验收目标。
 
-如果环境中未安装上述库，会抛出明确错误，而不是把 PDF 逻辑耦合进 workflow。
-
-### 7. 完成 services 层统一导出与配置补充
-
-本阶段同步补充了：
-
-- `src/services/__init__.py` 聚合导出
-- `src/core/config.py` 中的模板目录、输出目录、审计目录、文档目录与缺失值常量
-- `pyproject.toml` 中的 Python 版本约束调整为 `>=3.9,<3.10`
-- `pyproject.toml` 新增 `openpyxl` 依赖声明
+当前确认的默认表头预置方案如下：
 
-这一步使当前实现与项目目标 Python `3.9.25` 更一致，也补齐了 Excel 层运行所需依赖声明。
+#### 模板1：财务系统录入发票字段
 
+- `序号`
+- `发票号码`
+- `发票代码`
+- `发票金额`
+- `备注`
 
-### 8. 补充前后端围绕 optional 字段的后续构建思路
+#### 模板2：大创低值材料资产入库模板自动导入
 
-围绕模板中的 `optional_field_ids`，当前服务层已经具备后续前后端接入的基础约束，可按以下方式构建：
+- `低值材料分类号`
+- `资产名称`
+- `品牌`
+- `规格型号`
+- `单位`
+- `数量`
+- `单价`
+- `总价`
+- `供应商`
+- `发票编号`
+- `开票日期`
+- `存放地址`
+- `备注`
 
-- 在模板 JSON 中预先定义 `optional_field_ids`，例如 `template/finance_invoice_v1.json` 中先声明允许用户追加的可选字段
-- 前端在用户选择模板后，先请求后端模板详情接口，读取该模板的 `default_field_ids`、`optional_field_ids` 和字段展示信息
-- 前端将 `optional_field_ids` 渲染为可勾选列表，供用户决定本次任务是否追加这些字段
-- 当前端未勾选任何 optional 字段时，向后端传空列表或 `None`
-- 后端收到 `selected_optional_field_ids` 后，由 template 层合并出最终 `target_fields`
-- workflow 将 `default_fields`、用户选中的 `optional_fields`、字段定义和全量映射传递给 excel 层
-- excel 层根据本次任务的 `target_fields` 判断哪些 optional 字段需要显示表头、写入数据，哪些 optional 字段需要隐藏并清空单元格
+### 必须满足的验收项
 
-这条思路的好处是：
+1. Excel 后续消费的识别结果来源必须是固定中文键 JSON。
+2. Excel 逻辑不得反向影响 LLM 标准 JSON key。
+3. 上述两个模板的默认表头预置方案可被清晰配置、读取和消费。
 
-- optional 字段能力先在模板层声明，避免前端和后端各自维护一份可选字段清单
-- 前端只负责展示和收集用户选择，不直接参与字段映射和写表规则判断
-- 后端以 `selected_optional_field_ids` 为唯一输入，统一决定 prompt 字段集合和 Excel 落表结果
-- 同一个模板可以在不改主链路代码的情况下扩展新的 optional 字段
+### 验收方法
 
-如果后续接入 API 层，建议至少提供以下接口或返回结构：
+- 校验 Excel 后续消费入口接收的是固定中文键 JSON
+- 校验不存在“Excel 表头名回写为 LLM key”的实现
+- 校验模板1和模板2的默认表头预置方案可被正确读取
 
-- 模板列表接口：返回 `template_id`、`template_name`、`template_version`
-- 模板详情接口：返回 `default_field_ids`、`optional_field_ids`、字段标签与字段说明
-- 任务执行接口：接收 `template_id`、`template_version`、`selected_optional_field_ids` 和上传文件
+### 通过标准
 
-这样前端就可以形成稳定流程：
+- Excel 后续消费契约与 LLM 标准 JSON 契约不冲突
+- 模板默认表头预置方案与已确认业务口径一致
 
-`选择模板 -> 拉取 optional 选项 -> 用户勾选 -> 提交 selected_optional_field_ids -> 后端控制 prompt 与 Excel 表头/数据写入`
-## 关键改动文件
+---
 
-本阶段重点涉及以下文件：
+## 五、Workflow层验收
 
-- `src/core/config.py`
-- `src/services/__init__.py`
-- `src/services/template/models.py`
-- `src/services/template/service.py`
-- `src/services/template/__init__.py`
-- `src/services/excel/models.py`
-- `src/services/excel/service.py`
-- `src/services/excel/__init__.py`
-- `src/services/document/models.py`
-- `src/services/document/service.py`
-- `src/services/document/__init__.py`
-- `src/services/workflow/models.py`
-- `src/services/workflow/service.py`
-- `src/services/workflow/__init__.py`
-- `template/index.json`
-- `template/finance_invoice_v1.json`
-- `template/asset_import_v1.json`
-- `template/assets/finance_invoice_template_v1.xlsx`
-- `template/assets/asset_import_template_v1.xlsx`
-- `tests/unit/test_template_service.py`
-- `tests/unit/test_excel_service.py`
-- `tests/unit/test_document_service.py`
-- `tests/unit/test_workflow_service.py`
-- `pyproject.toml`
+### 验收目标
 
-## 已完成验证
+Workflow 层能够基于新的标准 JSON 模型跑通“文件解析 -> 字段识别 -> 审计落盘”主链路。
 
-本阶段已执行并通过的验证包括：
+### 必须满足的验收项
 
-- `python -m compileall src tests/unit/test_template_service.py tests/unit/test_excel_service.py tests/unit/test_document_service.py tests/unit/test_workflow_service.py`
-- 基于内联 smoke script 的服务层联调验证，覆盖：
-  - 模板加载与字段合并
-  - Excel 写入与结果回读
-  - 图片文件 document 解析
-  - PDF 无渲染后端时的明确报错
-  - workflow 主链路执行
-  - Excel 输出文件生成
-  - 审计文件落盘
+1. Workflow 不再依赖模板 optional 字段白名单决定识别字段。
+2. Workflow 能基于固定中文键契约构造 `PromptContext`。
+3. Workflow 能获取并落盘清洗后的标准 JSON。
+4. Workflow 审计文件记录本次标准 JSON 结果。
+5. 失败时仍保留阶段状态和错误信息。
 
-smoke 验证结论：
+### 验收方法
 
-- `template` 可正常返回目标字段集合与映射
-- `excel` 可正确写入模板单元格
-- `document` 可对图片返回统一结构
-- `workflow` 可在 stub LLM 条件下跑通主链路并输出审计
+- 使用 stub document 和 stub LLM 跑通 workflow
+- 验证模板不会改变 LLM 输出中文键
+- 验证审计文件包含完整标准 JSON
+- 校验生成的审计文件中是否包含：
+  - 清洗后的 JSON
+  - 状态历史
+  - 错误信息
 
-## 已补充测试
+### 通过标准
 
-当前新增测试覆盖了以下内容：
+- 新主链路可以围绕标准 JSON 跑通
+- 不再依赖旧的 `selected_optional_field_ids`
+- 审计结果可用于回溯本次识别行为
 
-- 模板列表查询
-- 默认字段与可选字段合并
-- 字段顺序稳定性与去重
-- Excel 模板写入
-- 未选 optional 字段时表头隐藏
-- 选择部分 optional 字段时表头按需显示
-- 图片文件 document 解析
-- PDF 依赖缺失时的错误路径
-- workflow 成功路径
+---
 
-## 当前遗留问题与限制
+## 六、Document层验收
 
-### 1. pytest 在当前本地环境下未作为最终验收方式使用
+### 验收目标
 
-本次尝试直接执行 `pytest` 时，测试启动阶段出现长时间卡住，运行环境显示为本机的 Python 3.7 / Anaconda 环境，不是项目目标 Python 3.9.25 环境。
+Document 层继续作为统一输入预处理层，为 workflow 提供图像路径、页码顺序和 manifest。
 
-因此本阶段没有将 `pytest` 通过作为最终验收结论，而是改用：
+### 必须满足的验收项
 
-- `compileall`
-- 内联 smoke script
+1. 能识别图片文件与 PDF 文件。
+2. 图片文件可直接输出统一结构。
+3. PDF 文件可输出稳定顺序的图像列表或明确依赖错误。
+4. `manifest` 中能记录文件与页面关系。
 
-进行代码有效性验证。
+### 验收方法
 
-这说明当前仓库实现本身已可导入、可运行，但本地测试解释器环境仍需要统一。
+- 使用图片文件做直通解析测试
+- 使用 PDF 做抽图测试或依赖缺失错误测试
+- 校验 `image_paths`、`page_indices`、`manifest`
 
-### 2. PDF 抽图能力代码已接入，但当前环境未激活
+### 通过标准
 
-当前仓库中已经实现 PDF 抽图的统一入口，但执行依赖以下库之一：
+- Document 层输出结构稳定
+- Workflow 不需要关心底层 PDF 细节
 
-- `PyMuPDF`
-- `pypdfium2`
+---
 
-在当前环境下，这两个库都未安装，因此 PDF 路径目前表现为：
+## 七、关键回归点
 
-- 代码结构已完成
-- 错误提示明确
-- 真实抽图能力待环境补齐后激活
+以下内容属于本轮重构后的重点回归项：
 
-### 3. workflow 仍以服务层联调为主，尚未接入 API 层
+1. 不允许重新引入“模板决定 LLM 字段 key”的实现。
+2. 不允许把模板表头或 Excel 表头误当作 LLM 标准 JSON key 使用。
+3. 不允许 workflow 对模板 optional 白名单做旧式强校验。
+4. 不允许审计文件丢失清洗后的标准 JSON。
 
-当前 `WorkflowService` 已经具备主链路能力，但还没有正式接到：
+---
 
-- `src/api/routes/`
-- `src/api/services/`
-- 请求响应 schema
+## 八、最小测试清单
 
-因此本阶段的验收结论是：
+建议至少补齐以下测试：
 
-- 服务层已落地
-- API 集成尚未开始
+### 单元测试
 
-## 当前状态判断
+- 标准 JSON 配置加载测试
+- 标准 JSON key 校验测试
+- 模板不干预 LLM 输出字段测试
+- LLM JSON 解析标准化测试
+- Workflow 成功路径测试
+- Workflow 审计落盘测试
 
-到当前为止，services 层已经完成以下目标：
+### 集成测试
 
-- 分层边界已明确并代码化
-- 模板定义从业务代码中抽离到 JSON 配置
-- Excel 写表能力已可独立运行
-- optional 字段表头已改为按用户选择动态显示
-- workflow 已具备最小主链路能力
-- document 已具备统一输入结构与图片直通能力
-- 审计落盘机制已建立
+- 图片输入主链路集成测试
+- 审计文件内容校验测试
 
-也就是说，`contexts/services.md` 中要求的 services 落地已经不再停留在设计阶段，而是进入“可继续向 API 层和完整业务流接入”的状态。
+---
 
-## 下一步建议
+## 九、最终通过条件
 
-最自然的下一步是将这套服务层正式接入 API 层，至少补齐以下内容：
+当且仅当以下条件同时满足时，本次 services 层重构视为验收通过：
 
-- `src/api/schemas/` 的请求响应模型
-- `src/api/routes/` 的上传、执行、查询接口
-- `src/api/services/` 的异步任务编排入口
-- workflow 与前端参数的对接
-- PDF 抽图依赖的环境补齐与真实验证
-- 真实 LLM provider 下的集成测试
+1. 系统已落地全局标准 JSON 定义。
+2. LLM 输出已稳定围绕固定中文键。
+3. 模板层不再反向决定 LLM 输出 key。
+4. Workflow 已围绕标准 JSON 跑通。
+5. 审计文件可完整回溯识别结果。
+6. 核心单元测试与主链路集成测试通过。
 
-优先级上，建议先做 API 接入与环境统一，再做 PDF 抽图依赖补齐和端到端联调。
+---
 
+## 当前阶段建议
 
+建议按以下顺序执行验收：
+
+1. 先验收标准 JSON 层和 LLM 层
+2. 再验收模板层与 workflow 主链路
+3. 最后补 Excel 消费层验收
+
+原因是本次重构的核心依赖顺序为：
+
+- 先稳定 LLM 识别契约
+- 再验证模板不会反向污染契约
+- 最后再扩展后续消费层
+
+---
+
+## 一句话结论
+
+本轮 services 层验收的核心，首先是 LLM 是否稳定输出这组固定中文键，以及模板和 workflow 是否不再破坏这份识别契约。
