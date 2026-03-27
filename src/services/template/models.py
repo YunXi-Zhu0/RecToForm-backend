@@ -4,26 +4,14 @@ from typing import Dict, List
 
 
 @dataclass(frozen=True)
-class TemplateFieldDefinition:
-    field_id: str
-    field_label: str
-    description: str = ""
-    required: bool = False
-    example_value: str = ""
-    value_type: str = "string"
-    source_hint: str = ""
-    default_value: str = ""
-
-
-@dataclass(frozen=True)
 class TemplateDefinition:
     template_id: str
     template_name: str
     template_version: str
     mapping_version: str
     excel_template_path: Path
-    default_field_ids: List[str] = field(default_factory=list)
-    optional_field_ids: List[str] = field(default_factory=list)
+    recommended_field_ids: List[str] = field(default_factory=list)
+    default_header_labels: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -35,6 +23,9 @@ class ExcelFieldMapping:
     sheet_name: str
     cell: str
     write_mode: str = "overwrite"
+    value_source: str = "standard"
+    source_key: str = ""
+    default_value: str = ""
 
 
 @dataclass(frozen=True)
@@ -44,12 +35,10 @@ class TemplateBundle:
     template_version: str
     mapping_version: str
     excel_template_path: Path
-    field_definitions: Dict[str, TemplateFieldDefinition]
-    default_fields: List[str]
-    optional_fields: List[str]
-    target_fields: List[str]
+    recommended_field_ids: List[str]
+    default_header_labels: Dict[str, str]
     excel_mappings: Dict[str, ExcelFieldMapping]
-    all_excel_mappings: Dict[str, ExcelFieldMapping]
+    referenced_standard_fields: List[str]
 
 
 @dataclass(frozen=True)

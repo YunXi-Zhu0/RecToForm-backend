@@ -2,8 +2,6 @@ import mimetypes
 from pathlib import Path
 from typing import List, Optional
 
-from PIL import Image
-
 from src.core.config import DEFAULT_DOCUMENT_OUTPUT_DIR
 from src.services.document.models import (
     DocumentManifest,
@@ -51,8 +49,6 @@ class DocumentService:
         return "unknown"
 
     def _parse_image(self, path: Path, uploaded: UploadedFileMeta) -> DocumentParseResult:
-        with Image.open(path) as image:
-            image.verify()
         page_images = [PageImageItem(page_index=1, image_path=str(path), source_type="image")]
         manifest = DocumentManifest(
             source_file_path=str(path),

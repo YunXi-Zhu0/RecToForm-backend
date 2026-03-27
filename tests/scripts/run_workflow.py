@@ -1,17 +1,23 @@
 from pathlib import Path
+from typing import Optional
 
 from src.services.workflow import WorkflowRequest, WorkflowService
 
 
 async def run_workflow_service(
-        path: Path,
-        template_id: str,
-        template_version: str,
-        selected_optional_field_ids: list[str],
-        extra_instructions: list[str],
-        task_id: str = "real-run-001",
+    path: Path,
+    template_id: Optional[str],
+    template_version: Optional[str],
+    extra_instructions: list[str],
+    task_id: str = "real-run-001",
 ):
-    service = WorkflowService()
+    from src.services.llm import LLMService
+
+    provider_name = "qwen_local_openai_compatible"
+    llm_service = LLMService(provider_name=provider_name)
+
+
+    service = WorkflowService(llm_service=llm_service)
 
     result = await service.run(
         WorkflowRequest(
@@ -19,30 +25,26 @@ async def run_workflow_service(
             input_file_path=str(path),
             template_id=template_id,
             template_version=template_version,
-            selected_optional_field_ids=selected_optional_field_ids,
             extra_instructions=extra_instructions,
         )
     )
 
-    print("task_id:", result.task_id)
-    print("status:", result.status.value)
-    print("excel_output_path:", result.excel_output_path)
-    print("audit_file_path:", result.audit_file_path)
-    print("structured_data:", result.structured_data.data)
+    from pprint import pprint
+    pprint(f"task_id: {result.task_id}", indent=4)
+    pprint(f"status: {result.status.value}", indent=4)
+    pprint(f"excel_output_path: {result.excel_output_path}", indent=4)
+    pprint(f"audit_file_path: {result.audit_file_path}", indent=4)
+    pprint(f"structured_data: {result.structured_data.data}", indent=4)
 
 
 if __name__ == "__main__":
     import asyncio
+
     from src.core.config import TESTS_DIR
 
     path = TESTS_DIR / "fixtures" / "invoices" / "汽油25.pdf"
     template_id = "finance_invoice"
     template_version = "v1"
-    selected_optional_field_ids = [
-        "invoice_date",
-        "seller_name",
-        "buyer_name",
-    ]
     extra_instructions = [
         "Return valid JSON only.",
         "Keep the original amount format from the invoice.",
@@ -54,7 +56,6 @@ if __name__ == "__main__":
             path=path,
             template_id=template_id,
             template_version=template_version,
-            selected_optional_field_ids=selected_optional_field_ids,
             extra_instructions=extra_instructions,
         )
     )

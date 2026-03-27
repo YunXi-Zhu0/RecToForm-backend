@@ -2,7 +2,6 @@ from src.services.template.models import (
     ExcelFieldMapping,
     TemplateBundle,
     TemplateDefinition,
-    TemplateFieldDefinition,
     TemplateSummary,
 )
 from src.services.template.service import (
@@ -16,7 +15,6 @@ __all__ = [
     "TemplateBundle",
     "TemplateConfigError",
     "TemplateDefinition",
-    "TemplateFieldDefinition",
     "TemplateNotFoundError",
     "TemplateService",
     "TemplateSummary",

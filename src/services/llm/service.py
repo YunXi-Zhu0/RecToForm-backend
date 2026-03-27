@@ -1,7 +1,5 @@
 from typing import Any, Dict, Optional, Sequence
 
-from src.integrations.llm.capabilities.llm_capabilities import LLMCapabilities
-from src.integrations.llm.factory.llm_factory import get_llm_provider
 from src.integrations.llm.schema.request import ImagePath, LLMRequest
 from src.integrations.llm.schema.response import LLMResponse
 from src.services.llm.json_parser import parse_structured_output
@@ -26,7 +24,7 @@ class LLMService:
     ) -> StructuredExtractionResult:
         return parse_structured_output(
             raw_text=raw_text,
-            target_fields=context.fields.target_fields,
+            standard_fields=context.standard_fields,
             missing_value=context.missing_value,
         )
 
@@ -39,6 +37,9 @@ class LLMService:
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> LLMResponse:
+        from src.integrations.llm.capabilities.llm_capabilities import LLMCapabilities
+        from src.integrations.llm.factory.llm_factory import get_llm_provider
+
         provider = get_llm_provider(
             provider_name=self.provider_name,
             required_capabilities=LLMCapabilities(

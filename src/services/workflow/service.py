@@ -6,8 +6,14 @@ from typing import List, Optional
 
 from src.core.config import DEFAULT_AUDIT_DIR, DEFAULT_OUTPUT_DIR
 from src.services.document import DocumentService
-from src.services.excel import ExcelService, ExcelWriteRequest, StructuredInvoiceData
-from src.services.llm import LLMService, PromptContext, PromptFieldSet
+from src.services.excel import (
+    ExcelService,
+    ExcelWriteRequest,
+    StandardExcelWriteRequest,
+    StructuredInvoiceData,
+)
+from src.services.llm import LLMService, PromptContext
+from src.services.standard import StandardSchemaService
 from src.services.template import TemplateService
 from src.services.workflow.models import (
     WorkflowAuditRecord,
@@ -18,16 +24,23 @@ from src.services.workflow.models import (
 
 
 class WorkflowService:
+    DEFAULT_STANDARD_EXPORT_TEMPLATE_ID = "standard_fields_default"
+    DEFAULT_STANDARD_EXPORT_TEMPLATE_NAME = "标准字段直出"
+
     def __init__(
         self,
         template_service: Optional[TemplateService] = None,
         excel_service: Optional[ExcelService] = None,
         document_service: Optional[DocumentService] = None,
         llm_service: Optional[LLMService] = None,
+        standard_schema_service: Optional[StandardSchemaService] = None,
         output_dir: Optional[Path] = None,
         audit_dir: Optional[Path] = None,
     ) -> None:
-        self.template_service = template_service or TemplateService()
+        self.standard_schema_service = standard_schema_service or StandardSchemaService()
+        self.template_service = template_service or TemplateService(
+            standard_schema_service=self.standard_schema_service
+        )
         self.excel_service = excel_service or ExcelService()
         self.document_service = document_service or DocumentService()
         self.llm_service = llm_service or LLMService()
@@ -41,6 +54,7 @@ class WorkflowService:
         excel_output_path = ""
         audit_file_path = self.audit_dir / ("%s.json" % request.task_id)
         template_bundle = None
+        standard_schema = None
         prompt_context = None
         document_result = None
 
@@ -49,24 +63,40 @@ class WorkflowService:
                 input_file_path=Path(request.input_file_path),
                 task_id=request.task_id,
             )
-            template_bundle = self.template_service.get_template_bundle(
-                template_id=request.template_id,
-                template_version=request.template_version,
-                selected_optional_field_ids=request.selected_optional_field_ids,
-            )
-            status_history.append(WorkflowStatus.TEMPLATE_READY.value)
+            standard_schema = self.standard_schema_service.load_schema()
+            if request.template_id:
+                template_bundle = self.template_service.get_template_bundle(
+                    template_id=request.template_id,
+                    template_version=request.template_version,
+                )
+                status_history.append(WorkflowStatus.TEMPLATE_READY.value)
 
             prompt_context = PromptContext(
-                template_id=template_bundle.template_id,
-                template_name=template_bundle.template_name,
+                template_id=(
+                    template_bundle.template_id
+                    if template_bundle
+                    else self.DEFAULT_STANDARD_EXPORT_TEMPLATE_ID
+                ),
+                template_name=(
+                    template_bundle.template_name
+                    if template_bundle
+                    else self.DEFAULT_STANDARD_EXPORT_TEMPLATE_NAME
+                ),
                 file_type=document_result.file_type.upper(),
                 page_indices=document_result.page_indices,
-                fields=PromptFieldSet(
-                    default_fields=template_bundle.default_fields,
-                    optional_fields=template_bundle.optional_fields,
+                standard_fields=list(standard_schema.keys),
+                schema_version=standard_schema.version,
+                recommended_output_fields=(
+                    template_bundle.recommended_field_ids
+                    if template_bundle
+                    else list(standard_schema.keys)
                 ),
+                missing_value=standard_schema.default_missing_value,
                 extra_instructions=request.extra_instructions,
-                json_example={field_id: "" for field_id in template_bundle.target_fields},
+                json_example={
+                    field_id: standard_schema.default_missing_value
+                    for field_id in standard_schema.keys
+                },
             )
             status_history.append(WorkflowStatus.PROMPT_READY.value)
             status_history.append(WorkflowStatus.LLM_PROCESSING.value)
@@ -77,28 +107,35 @@ class WorkflowService:
             )
             structured_data = self.excel_service.build_structured_invoice_data(
                 result=llm_result,
-                target_fields=template_bundle.target_fields,
+                standard_fields=standard_schema.keys,
             )
             status_history.append(WorkflowStatus.JSON_VALIDATED.value)
             status_history.append(WorkflowStatus.EXCEL_GENERATING.value)
 
-            excel_result = self.excel_service.write(
-                ExcelWriteRequest(
-                    template_id=template_bundle.template_id,
-                    template_version=template_bundle.template_version,
-                    mapping_version=template_bundle.mapping_version,
-                    excel_template_path=template_bundle.excel_template_path,
-                    structured_data=structured_data,
-                    target_fields=template_bundle.target_fields,
-                    default_fields=template_bundle.default_fields,
-                    optional_fields=template_bundle.optional_fields,
-                    field_definitions=template_bundle.field_definitions,
-                    excel_mappings=template_bundle.excel_mappings,
-                    all_excel_mappings=template_bundle.all_excel_mappings,
-                    output_dir=self.output_dir / "excel",
-                    output_filename="%s_%s.xlsx" % (request.task_id, template_bundle.template_id),
+            if template_bundle:
+                excel_result = self.excel_service.write(
+                    ExcelWriteRequest(
+                        template_id=template_bundle.template_id,
+                        template_version=template_bundle.template_version,
+                        mapping_version=template_bundle.mapping_version,
+                        excel_template_path=template_bundle.excel_template_path,
+                        structured_data=structured_data,
+                        export_field_ids=template_bundle.recommended_field_ids,
+                        default_header_labels=template_bundle.default_header_labels,
+                        excel_mappings=template_bundle.excel_mappings,
+                        output_dir=self.output_dir / "excel",
+                        output_filename="%s_%s.xlsx" % (request.task_id, template_bundle.template_id),
+                    )
                 )
-            )
+            else:
+                excel_result = self.excel_service.write_standard_fields(
+                    StandardExcelWriteRequest(
+                        structured_data=structured_data,
+                        standard_fields=list(standard_schema.keys),
+                        output_dir=self.output_dir / "excel",
+                        output_filename="%s_standard_fields.xlsx" % request.task_id,
+                    )
+                )
             excel_output_path = str(excel_result.output_file_path)
 
             self._persist_audit(
@@ -107,19 +144,46 @@ class WorkflowService:
                     task_id=request.task_id,
                     input_file_path=request.input_file_path,
                     template_snapshot={
-                        "template_id": template_bundle.template_id,
-                        "template_name": template_bundle.template_name,
-                        "template_version": template_bundle.template_version,
-                        "mapping_version": template_bundle.mapping_version,
-                        "excel_template_path": str(template_bundle.excel_template_path),
+                        "template_id": (
+                            template_bundle.template_id
+                            if template_bundle
+                            else self.DEFAULT_STANDARD_EXPORT_TEMPLATE_ID
+                        ),
+                        "template_name": (
+                            template_bundle.template_name
+                            if template_bundle
+                            else self.DEFAULT_STANDARD_EXPORT_TEMPLATE_NAME
+                        ),
+                        "template_version": template_bundle.template_version if template_bundle else "",
+                        "mapping_version": template_bundle.mapping_version if template_bundle else "",
+                        "excel_template_path": (
+                            str(template_bundle.excel_template_path) if template_bundle else ""
+                        ),
+                        "export_mode": "template" if template_bundle else "standard_fields",
+                        "recommended_field_ids": (
+                            template_bundle.recommended_field_ids
+                            if template_bundle
+                            else list(standard_schema.keys)
+                        ),
+                        "referenced_standard_fields": (
+                            template_bundle.referenced_standard_fields
+                            if template_bundle
+                            else list(standard_schema.keys)
+                        ),
                     },
-                    target_fields=template_bundle.target_fields,
+                    standard_fields=list(standard_schema.keys),
+                    export_fields=(
+                        template_bundle.recommended_field_ids
+                        if template_bundle
+                        else list(standard_schema.keys)
+                    ),
                     prompt_context=asdict(prompt_context),
                     llm_raw_text=llm_result.raw_text,
                     llm_cleaned_json=structured_data.data,
                     excel_output_path=excel_output_path,
                     document_manifest=document_result.manifest.to_dict(),
-                    status_history=status_history + [WorkflowStatus.AUDIT_PERSISTED.value, WorkflowStatus.SUCCEEDED.value],
+                    status_history=status_history
+                    + [WorkflowStatus.AUDIT_PERSISTED.value, WorkflowStatus.SUCCEEDED.value],
                 ),
             )
             return WorkflowResult(
@@ -137,10 +201,20 @@ class WorkflowService:
                     task_id=request.task_id,
                     input_file_path=request.input_file_path,
                     template_snapshot={
-                        "template_id": template_bundle.template_id if template_bundle else request.template_id,
+                        "template_id": (
+                            template_bundle.template_id
+                            if template_bundle
+                            else request.template_id or self.DEFAULT_STANDARD_EXPORT_TEMPLATE_ID
+                        ),
                         "template_version": template_bundle.template_version if template_bundle else request.template_version or "",
+                        "export_mode": "template" if template_bundle else "standard_fields",
                     },
-                    target_fields=template_bundle.target_fields if template_bundle else [],
+                    standard_fields=list(standard_schema.keys) if standard_schema else [],
+                    export_fields=(
+                        template_bundle.recommended_field_ids
+                        if template_bundle
+                        else list(standard_schema.keys) if standard_schema else []
+                    ),
                     prompt_context=asdict(prompt_context) if prompt_context else {},
                     llm_raw_text=llm_result.raw_text if llm_result else "",
                     llm_cleaned_json=structured_data.data,

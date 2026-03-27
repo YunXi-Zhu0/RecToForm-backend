@@ -7,7 +7,7 @@ from src.services.llm.models import StructuredExtractionResult
 
 def parse_structured_output(
     raw_text: str,
-    target_fields: List[str],
+    standard_fields: List[str],
     missing_value: str = "",
 ) -> StructuredExtractionResult:
     cleaned_text = extract_json_object(raw_text)
@@ -17,7 +17,7 @@ def parse_structured_output(
 
     normalized, extra_fields, missing_fields = normalize_fields(
         parsed,
-        target_fields=target_fields,
+        standard_fields=standard_fields,
         missing_value=missing_value,
     )
     return StructuredExtractionResult(
@@ -45,14 +45,14 @@ def extract_json_object(raw_text: str) -> str:
 
 def normalize_fields(
     parsed: Dict[str, Any],
-    target_fields: List[str],
+    standard_fields: List[str],
     missing_value: str = "",
 ) -> Tuple[Dict[str, Any], List[str], List[str]]:
     normalized: Dict[str, Any] = {}
-    extra_fields = [field_name for field_name in parsed.keys() if field_name not in target_fields]
+    extra_fields = [field_name for field_name in parsed.keys() if field_name not in standard_fields]
     missing_fields: List[str] = []
 
-    for field_name in target_fields:
+    for field_name in standard_fields:
         value = parsed.get(field_name, missing_value)
         normalized[field_name] = normalize_value(value, missing_value=missing_value)
         if field_name not in parsed:

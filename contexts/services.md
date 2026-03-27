@@ -1,5 +1,31 @@
 # Services 分层重构规划
 
+## 本轮已完成结果
+
+本轮 `services` 重构与修复已完成，当前代码状态已从“重构规划”进入“已落地实现”。
+
+本轮已落地的核心结果如下：
+
+1. 已新增全局标准字段配置 `template/standard_fields.json`，并由 `src/services/standard/` 统一加载与校验。
+2. `LLMService` 已切换为围绕固定中文键构造 prompt，并把模型输出标准化为稳定的标准 JSON。
+3. `TemplateService` 已不再承担 LLM 字段白名单职责，模板当前只负责导出展示方案、默认表头和 Excel 映射。
+4. `WorkflowService` 已不再依赖旧的 `selected_optional_field_ids` 语义，而是围绕标准 JSON 统一组织识别、审计与导出。
+5. `ExcelService` 已明确消费标准 JSON，不再反向影响 LLM key。
+6. 在模板导出模式之外，现已新增“无模板标准字段直出”模式：当 `WorkflowRequest.template_id` 不传时，workflow 会直接按标准字段顺序生成 Excel。
+
+当前系统已同时支持以下两种导出模式：
+
+- 模板导出模式：读取模板推荐列、表头和映射，把标准 JSON 写入指定模板文件。
+- 标准字段直出模式：不依赖模板资源，直接按照 `standard_fields.json` 中的标准字段顺序生成通用 Excel。
+
+这意味着当前分层职责已经进一步明确：
+
+- `standard` 定义识别契约
+- `llm` 生产标准 JSON
+- `template` 定义命名模板导出方案
+- `excel` 负责模板写入和标准字段直出
+- `workflow` 负责在“模板导出模式”和“无模板直出模式”之间编排切换
+
 ## 目标
 
 本轮重构将 `src/services/` 的核心设计从“模板驱动识别字段”调整为“LLM 固定输出程序级标准 JSON，模板后置消费识别结果”。
@@ -32,10 +58,11 @@
 - 模板仍可保留默认模板元信息与映射资源
 - 模板不再对白名单外字段做“是否允许抽取”的强约束
 
-### 3. `services/excel` 后续负责把标准 JSON 写成目标表格
+### 3. `services/excel` 负责把标准 JSON 写成目标表格
 
-- 当前阶段先不把 Excel 表头方案并入 LLM 契约
-- Excel 后续根据模板映射和标准 JSON 生成目标表格
+- Excel 不把表头方案并入 LLM 契约
+- Excel 可根据模板映射和标准 JSON 生成目标表格
+- Excel 也可在无模板模式下按标准字段顺序直接生成通用表格
 - Excel 不参与字段识别和字段合法性推断
 
 ### 4. `services/workflow` 负责主链路编排
@@ -131,9 +158,13 @@
 2. 先移除“模板 optional 白名单决定识别字段”的思路。
 3. `selected_field_ids`、模板推荐列、表头覆盖策略作为下一阶段能力接入。
 
-### 4. 表头与导出策略属于后续阶段
+### 4. 表头与导出策略已拆分为两类能力
 
-在当前文档版本中，表头覆盖、模板推荐列、Excel 导出列优先级均属于后续设计，不应回写到 LLM 标准 JSON 契约中。
+当前已落地的导出策略如下：
+
+1. 模板模式下，表头覆盖、模板推荐列和 Excel 单元格映射由模板资源提供。
+2. 无模板模式下，Excel 直接按 `standard_fields.json` 中的字段顺序生成通用表头。
+3. 无论使用哪种导出模式，这些导出策略都不能回写到 LLM 标准 JSON 契约中。
 
 当前已确认的 Excel 输出侧默认表头预置方案如下：
 
@@ -180,6 +211,8 @@
 
 ## 分层改造方案
 
+以下阶段中，第一阶段、第二阶段、第三阶段和第四阶段的核心内容已经完成落地；其中“无模板标准字段直出”属于在原方案基础上的补充增强。
+
 ## 第一阶段：标准字段层
 
 ### 目标
@@ -205,6 +238,10 @@
 ### 产出
 
 - 可被 `llm`、`template`、`excel`、`workflow` 共同使用的标准 JSON 契约定义
+- 当前已落地文件：
+  - `template/standard_fields.json`
+  - `src/services/standard/models.py`
+  - `src/services/standard/service.py`
 
 ### 验收标准
 
@@ -212,6 +249,11 @@
 - 能校验中文 key 是否唯一且完整
 - LLM 输出可按这组中文 key 完成补空和清洗
 - 不存在重复或缺失的标准 key
+
+### 当前实现说明
+
+- `StandardSchemaService` 已实现标准字段加载、重复 key 校验、缺失 key 校验和非法 key 校验
+- `src/core/config.py` 已增加标准字段配置路径
 
 ---
 
@@ -232,8 +274,7 @@
 1. 读取模板推荐列方案
 2. 读取模板默认表头名
 3. 基于标准字段校验模板引用是否合法
-4. 根据用户的 `selected_field_ids` 构造最终导出字段列表
-5. 输出 Excel 所需映射和表头策略
+4. 输出 Excel 所需映射和表头策略
 
 ### 建议数据结构
 
@@ -255,9 +296,47 @@
 - `template_version`
 - `mapping_version`
 - `excel_template_path`
-- `recommended_fields`
-- `selected_fields`
-- `field_definitions`
+- `recommended_field_ids`
+- `default_header_labels`
+- `excel_mappings`
+- `referenced_standard_fields`
+
+### 当前实现说明
+
+- 模板已移除 `default_field_ids`、`optional_field_ids`、`selected_optional_field_ids` 相关主链路语义
+- 模板 JSON 当前仅描述模板推荐导出字段、默认表头和 Excel 映射
+- 模板中所有 `value_source=standard` 的 `source_key` 都会被校验是否属于标准字段契约
+
+---
+
+## 补充增强：无模板标准字段直出
+
+### 目标
+
+在保留模板导出模式的同时，支持 workflow 在不传 `template_id` 时直接输出标准字段 Excel。
+
+### 已落地能力
+
+1. `WorkflowRequest.template_id` 与 `template_version` 已调整为可选参数。
+2. `WorkflowService` 已新增“标准字段直出模式”分支。
+3. `ExcelService` 已新增标准字段直出写入接口。
+4. 审计文件已记录本次导出模式为 `template` 或 `standard_fields`。
+
+### 当前行为
+
+- 当 `template_id` 有值时：
+  - workflow 读取模板资源
+  - excel 按模板映射写入
+- 当 `template_id` 为空时：
+  - workflow 不读取模板资源
+  - excel 直接按标准字段顺序生成通用工作簿
+  - 第一行写字段名，第二行写识别结果
+
+### 设计结论
+
+- “是否使用模板”属于主链路编排决策，职责在 `workflow`
+- “如何把标准 JSON 写成 Excel”属于导出能力，职责在 `excel`
+- `template` 不承担无模板默认导出能力
 - `resolved_header_labels`
 - `excel_mappings`
 - `all_excel_mappings`

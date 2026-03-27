@@ -21,9 +21,8 @@ class WorkflowStatus(str, Enum):
 class WorkflowRequest:
     task_id: str
     input_file_path: str
-    template_id: str
+    template_id: Optional[str] = None
     template_version: Optional[str] = None
-    selected_optional_field_ids: List[str] = field(default_factory=list)
     extra_instructions: List[str] = field(default_factory=list)
 
 
@@ -32,7 +31,8 @@ class WorkflowAuditRecord:
     task_id: str
     input_file_path: str
     template_snapshot: Dict[str, Any]
-    target_fields: List[str]
+    standard_fields: List[str]
+    export_fields: List[str]
     prompt_context: Dict[str, Any]
     llm_raw_text: str
     llm_cleaned_json: Dict[str, Any]

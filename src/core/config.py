@@ -27,6 +27,7 @@ def _get_int_env(key: str, default: int) -> int:
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 TESTS_DIR = ROOT_DIR / "tests"
 TEMPLATE_DIR = ROOT_DIR / "template"
+STANDARD_FIELDS_CONFIG_PATH = TEMPLATE_DIR / "standard_fields.json"
 DEFAULT_OUTPUT_DIR = ROOT_DIR / "outputs"
 DEFAULT_AUDIT_DIR = DEFAULT_OUTPUT_DIR / "audits"
 DEFAULT_DOCUMENT_OUTPUT_DIR = DEFAULT_OUTPUT_DIR / "documents"

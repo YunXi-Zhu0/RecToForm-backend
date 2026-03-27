@@ -1,13 +1,13 @@
 import json
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, List, Optional
 
 from src.core.config import TEMPLATE_DIR
+from src.services.standard import StandardSchemaService
 from src.services.template.models import (
     ExcelFieldMapping,
     TemplateBundle,
     TemplateDefinition,
-    TemplateFieldDefinition,
     TemplateSummary,
 )
 
@@ -21,9 +21,14 @@ class TemplateConfigError(ValueError):
 
 
 class TemplateService:
-    def __init__(self, template_dir: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        template_dir: Optional[Path] = None,
+        standard_schema_service: Optional[StandardSchemaService] = None,
+    ) -> None:
         self.template_dir = Path(template_dir or TEMPLATE_DIR)
         self.index_path = self.template_dir / "index.json"
+        self.standard_schema_service = standard_schema_service or StandardSchemaService()
 
     def list_templates(self) -> List[TemplateSummary]:
         return [
@@ -40,7 +45,6 @@ class TemplateService:
         self,
         template_id: str,
         template_version: Optional[str] = None,
-        selected_optional_field_ids: Optional[Iterable[str]] = None,
     ) -> TemplateBundle:
         payload = self._load_json(
             self._resolve_template_file(
@@ -49,54 +53,22 @@ class TemplateService:
             )
         )
         definition = self._build_definition(payload)
-        field_definitions = self._build_field_definitions(payload)
-        self._validate_definition(definition, field_definitions)
-
-        selected_optional_ids = self.merge_fields(
-            default_field_ids=[],
-            optional_field_ids=list(selected_optional_field_ids or []),
-            allowed_optional_ids=definition.optional_field_ids,
-        )
-        target_fields = self.merge_fields(
-            default_field_ids=definition.default_field_ids,
-            optional_field_ids=selected_optional_ids,
-        )
         all_excel_mappings = self._build_all_mappings(payload=payload, definition=definition)
-        excel_mappings = self._select_target_mappings(
-            mappings=all_excel_mappings,
-            target_fields=target_fields,
-        )
+        self._validate_definition(definition, all_excel_mappings)
         return TemplateBundle(
             template_id=definition.template_id,
             template_name=definition.template_name,
             template_version=definition.template_version,
             mapping_version=definition.mapping_version,
             excel_template_path=definition.excel_template_path,
-            field_definitions=field_definitions,
-            default_fields=list(definition.default_field_ids),
-            optional_fields=selected_optional_ids,
-            target_fields=target_fields,
-            excel_mappings=excel_mappings,
-            all_excel_mappings=all_excel_mappings,
+            recommended_field_ids=list(definition.recommended_field_ids),
+            default_header_labels=dict(definition.default_header_labels),
+            excel_mappings=self._select_target_mappings(
+                mappings=all_excel_mappings,
+                target_fields=definition.recommended_field_ids,
+            ),
+            referenced_standard_fields=self._collect_referenced_standard_fields(all_excel_mappings),
         )
-
-    def merge_fields(
-        self,
-        default_field_ids: Iterable[str],
-        optional_field_ids: Iterable[str],
-        allowed_optional_ids: Optional[Iterable[str]] = None,
-    ) -> List[str]:
-        defaults = list(default_field_ids)
-        allowed = set(allowed_optional_ids or [])
-        should_validate_optional = allowed_optional_ids is not None
-        merged: List[str] = []
-
-        for field_id in defaults + list(optional_field_ids):
-            if should_validate_optional and field_id not in allowed and field_id not in defaults:
-                raise TemplateConfigError("Unknown optional field id: %s" % field_id)
-            if field_id not in merged:
-                merged.append(field_id)
-        return merged
 
     def _load_index(self) -> List[Dict[str, str]]:
         if not self.index_path.is_file():
@@ -128,28 +100,9 @@ class TemplateService:
             template_version=str(payload["template_version"]),
             mapping_version=str(payload["mapping_version"]),
             excel_template_path=self.template_dir / str(payload["excel_template_path"]),
-            default_field_ids=list(payload.get("default_field_ids", [])),
-            optional_field_ids=list(payload.get("optional_field_ids", [])),
+            recommended_field_ids=list(payload.get("recommended_field_ids", [])),
+            default_header_labels=dict(payload.get("default_header_labels", {})),
         )
-
-    def _build_field_definitions(
-        self,
-        payload: Dict[str, object],
-    ) -> Dict[str, TemplateFieldDefinition]:
-        definitions: Dict[str, TemplateFieldDefinition] = {}
-        for item in payload.get("field_definitions", []):
-            field = TemplateFieldDefinition(
-                field_id=str(item["field_id"]),
-                field_label=str(item["field_label"]),
-                description=str(item.get("description", "")),
-                required=bool(item.get("required", False)),
-                example_value=str(item.get("example_value", "")),
-                value_type=str(item.get("value_type", "string")),
-                source_hint=str(item.get("source_hint", "")),
-                default_value=str(item.get("default_value", "")),
-            )
-            definitions[field.field_id] = field
-        return definitions
 
     def _build_all_mappings(
         self,
@@ -166,14 +119,19 @@ class TemplateService:
                 sheet_name=str(item["sheet_name"]),
                 cell=str(item["cell"]),
                 write_mode=str(item.get("write_mode", "overwrite")),
+                value_source=str(item.get("value_source", "standard")),
+                source_key=str(item.get("source_key", "")),
+                default_value=str(item.get("default_value", "")),
             )
+            if mapping.field_id in mappings:
+                raise TemplateConfigError("Duplicated template field id: %s" % mapping.field_id)
             mappings[mapping.field_id] = mapping
         return mappings
 
     def _select_target_mappings(
         self,
         mappings: Dict[str, ExcelFieldMapping],
-        target_fields: Iterable[str],
+        target_fields: List[str],
     ) -> Dict[str, ExcelFieldMapping]:
         missing_fields = [field_id for field_id in target_fields if field_id not in mappings]
         if missing_fields:
@@ -185,18 +143,61 @@ class TemplateService:
     def _validate_definition(
         self,
         definition: TemplateDefinition,
-        field_definitions: Dict[str, TemplateFieldDefinition],
+        mappings: Dict[str, ExcelFieldMapping],
     ) -> None:
         if not definition.excel_template_path.is_file():
             raise TemplateConfigError(
                 "Excel template file not found: %s" % definition.excel_template_path
             )
-        expected_fields = definition.default_field_ids + definition.optional_field_ids
-        missing = [field_id for field_id in expected_fields if field_id not in field_definitions]
-        if missing:
+
+        missing_labels = [
+            field_id
+            for field_id in definition.recommended_field_ids
+            if field_id not in definition.default_header_labels
+        ]
+        if missing_labels:
             raise TemplateConfigError(
-                "Template field definitions are missing field ids: %s" % ", ".join(missing)
+                "Template default header labels are missing field ids: %s"
+                % ", ".join(missing_labels)
             )
+
+        missing_mappings = [
+            field_id for field_id in definition.recommended_field_ids if field_id not in mappings
+        ]
+        if missing_mappings:
+            raise TemplateConfigError(
+                "Template mappings are missing recommended field ids: %s"
+                % ", ".join(missing_mappings)
+            )
+
+        supported_sources = {"standard", "system", "user", "rule", "literal"}
+        for mapping in mappings.values():
+            if mapping.value_source not in supported_sources:
+                raise TemplateConfigError(
+                    "Unsupported mapping source type for field %s: %s"
+                    % (mapping.field_id, mapping.value_source)
+                )
+            if mapping.value_source == "standard" and not mapping.source_key:
+                raise TemplateConfigError(
+                    "Template standard mapping must define source_key: %s" % mapping.field_id
+                )
+
+        self.standard_schema_service.ensure_known_fields(
+            mapping.source_key
+            for mapping in mappings.values()
+            if mapping.value_source == "standard"
+        )
+
+    def _collect_referenced_standard_fields(
+        self,
+        mappings: Dict[str, ExcelFieldMapping],
+    ) -> List[str]:
+        referenced_fields: List[str] = []
+        for mapping in mappings.values():
+            if mapping.value_source != "standard" or mapping.source_key in referenced_fields:
+                continue
+            referenced_fields.append(mapping.source_key)
+        return referenced_fields
 
     def _load_json(self, path: Path) -> Dict[str, object]:
         with path.open("r", encoding="utf-8") as file:

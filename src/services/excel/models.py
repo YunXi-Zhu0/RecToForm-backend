@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
-from src.services.template.models import ExcelFieldMapping, TemplateFieldDefinition
+from src.services.template.models import ExcelFieldMapping
 
 
 @dataclass(frozen=True)
@@ -19,14 +19,20 @@ class ExcelWriteRequest:
     mapping_version: str
     excel_template_path: Path
     structured_data: StructuredInvoiceData
-    target_fields: List[str]
-    default_fields: List[str]
-    optional_fields: List[str]
-    field_definitions: Dict[str, TemplateFieldDefinition]
+    export_field_ids: List[str]
+    default_header_labels: Dict[str, str]
     excel_mappings: Dict[str, ExcelFieldMapping]
-    all_excel_mappings: Dict[str, ExcelFieldMapping]
     output_dir: Path
     output_filename: str = ""
+
+
+@dataclass(frozen=True)
+class StandardExcelWriteRequest:
+    structured_data: StructuredInvoiceData
+    standard_fields: List[str]
+    output_dir: Path
+    output_filename: str = ""
+    sheet_name: str = "Sheet1"
 
 
 @dataclass(frozen=True)
