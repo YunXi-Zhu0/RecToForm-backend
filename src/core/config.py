@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import List
 
 try:
     from dotenv import load_dotenv
@@ -24,6 +25,13 @@ def _get_int_env(key: str, default: int) -> int:
     return int(value)
 
 
+def _get_list_env(key: str, default: List[str]) -> List[str]:
+    value = os.getenv(key)
+    if value is None or value.strip() == "":
+        return list(default)
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 TESTS_DIR = ROOT_DIR / "tests"
 TEMPLATE_DIR = ROOT_DIR / "template"
@@ -31,7 +39,27 @@ STANDARD_FIELDS_CONFIG_PATH = TEMPLATE_DIR / "standard_fields.json"
 DEFAULT_OUTPUT_DIR = ROOT_DIR / "outputs"
 DEFAULT_AUDIT_DIR = DEFAULT_OUTPUT_DIR / "audits"
 DEFAULT_DOCUMENT_OUTPUT_DIR = DEFAULT_OUTPUT_DIR / "documents"
+API_OUTPUT_DIR = DEFAULT_OUTPUT_DIR / "api"
+API_UPLOAD_DIR = API_OUTPUT_DIR / "uploads"
+API_TASK_DIR = API_OUTPUT_DIR / "tasks"
+API_EXPORT_DIR = API_OUTPUT_DIR / "exports"
 DEFAULT_MISSING_VALUE = ""
+
+API_TITLE = os.getenv("API_TITLE", "RecToForm API")
+API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
+API_HOST = os.getenv("API_HOST", "127.0.0.1")
+API_PORT = _get_int_env("API_PORT", 8080)
+API_CORS_ORIGINS = _get_list_env("API_CORS_ORIGINS", ["*"])
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+RQ_QUEUE_NAME = os.getenv("RQ_QUEUE_NAME", "invoice_tasks")
+RQ_JOB_TIMEOUT = _get_int_env("RQ_JOB_TIMEOUT", 1800)
+RQ_RESULT_TTL = _get_int_env("RQ_RESULT_TTL", 86400)
+RQ_WORKER_PROCESSES = _get_int_env("RQ_WORKER_PROCESSES", 4)
+
+WORKFLOW_ASYNC_CONCURRENCY = _get_int_env("WORKFLOW_ASYNC_CONCURRENCY", 15)
+MAX_UPLOAD_FILES = _get_int_env("MAX_UPLOAD_FILES", 50)
+MAX_FILE_SIZE_MB = _get_int_env("MAX_FILE_SIZE_MB", 10)
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "qwen_local_openai_compatible")
 

@@ -2,6 +2,7 @@ from src.services.excel.models import (
     ExcelWriteRequest,
     ExcelWriteResult,
     StandardExcelWriteRequest,
+    TableExcelWriteRequest,
     StructuredInvoiceData,
 )
 from src.services.excel.service import ExcelService, ExcelWriteError
@@ -12,5 +13,6 @@ __all__ = [
     "ExcelWriteRequest",
     "ExcelWriteResult",
     "StandardExcelWriteRequest",
+    "TableExcelWriteRequest",
     "StructuredInvoiceData",
 ]

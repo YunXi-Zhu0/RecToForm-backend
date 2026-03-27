@@ -36,6 +36,15 @@ class StandardExcelWriteRequest:
 
 
 @dataclass(frozen=True)
+class TableExcelWriteRequest:
+    headers: List[str]
+    rows: List[List[str]]
+    output_dir: Path
+    output_filename: str = ""
+    sheet_name: str = "Sheet1"
+
+
+@dataclass(frozen=True)
 class ExcelWriteResult:
     output_file_path: Path
     written_fields: List[str]

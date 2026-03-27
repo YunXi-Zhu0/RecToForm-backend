@@ -21,6 +21,9 @@ def test_parse_image_returns_manifest() -> None:
 
 def test_parse_pdf_without_backend_raises_clear_error() -> None:
     service = DocumentService()
+    service._resolve_pdf_renderer = lambda: (_ for _ in ()).throw(  # type: ignore[attr-defined]
+        DocumentProcessingError("PDF processing requires PyMuPDF or pypdfium2 to be installed.")
+    )
 
     with pytest.raises(DocumentProcessingError, match="PyMuPDF or pypdfium2"):
         service.parse(PDF_FIXTURE, task_id="pdf-case")

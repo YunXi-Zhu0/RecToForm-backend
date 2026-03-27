@@ -7,6 +7,7 @@ from src.services.excel.models import (
     ExcelWriteRequest,
     ExcelWriteResult,
     StandardExcelWriteRequest,
+    TableExcelWriteRequest,
     StructuredInvoiceData,
 )
 from src.services.llm.models import StructuredExtractionResult
@@ -20,6 +21,32 @@ class ExcelWriteError(ValueError):
 class ExcelService:
     def __init__(self, output_dir: Optional[Path] = None) -> None:
         self.output_dir = Path(output_dir or DEFAULT_OUTPUT_DIR)
+
+    def write_table(self, request: TableExcelWriteRequest) -> ExcelWriteResult:
+        from openpyxl import Workbook
+
+        request.output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = request.output_dir / self._resolve_table_output_filename(request)
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = request.sheet_name
+
+        for column_index, header in enumerate(request.headers, start=1):
+            sheet.cell(row=1, column=column_index, value=header)
+
+        for row_index, row in enumerate(request.rows, start=2):
+            for column_index, value in enumerate(row, start=1):
+                sheet.cell(row=row_index, column=column_index, value=value)
+
+        workbook.save(output_path)
+        workbook.close()
+        return ExcelWriteResult(
+            output_file_path=output_path,
+            written_fields=list(request.headers),
+            skipped_fields=[],
+            missing_mappings=[],
+        )
 
     def write_standard_fields(self, request: StandardExcelWriteRequest) -> ExcelWriteResult:
         from openpyxl import Workbook
@@ -160,3 +187,8 @@ class ExcelService:
         if request.output_filename:
             return request.output_filename
         return "standard_fields_export.xlsx"
+
+    def _resolve_table_output_filename(self, request: TableExcelWriteRequest) -> str:
+        if request.output_filename:
+            return request.output_filename
+        return "table_export.xlsx"

@@ -59,6 +59,8 @@ class WorkflowService:
         document_result = None
 
         try:
+            status_history.append(WorkflowStatus.RUNNING.value)
+            status_history.append(WorkflowStatus.FILE_PREPROCESSING.value)
             document_result = self.document_service.parse(
                 input_file_path=Path(request.input_file_path),
                 task_id=request.task_id,
