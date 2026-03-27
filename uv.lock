@@ -860,7 +860,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "easyofd", specifier = "==0.5.1" },
-    { name = "fastapi", specifier = ">=0.116.0" },
+    { name = "fastapi", specifier = ">=0.135.2" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "openai", specifier = ">=2.28.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
