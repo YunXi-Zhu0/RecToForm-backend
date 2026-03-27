@@ -1,3 +1,8 @@
+from src.api.services.export_registry import (
+    ExportFileRegistry,
+    ExportRegistryError,
+    RedisExportFileRegistry,
+)
 from src.api.services.queue import (
     InlineQueueGateway,
     QueueDispatchError,
@@ -21,9 +26,12 @@ from src.api.services.task_repository import (
 )
 
 __all__ = [
+    "ExportFileRegistry",
+    "ExportRegistryError",
     "InlineQueueGateway",
     "QueueDispatchError",
     "QueueGateway",
+    "RedisExportFileRegistry",
     "RQQueueGateway",
     "ResultBuilder",
     "TaskCreateConfig",

@@ -1,6 +1,11 @@
 from functools import lru_cache
 
-from src.api.services import ResultBuilder, TaskDispatcher, TaskRepository
+from src.api.services import (
+    RedisExportFileRegistry,
+    ResultBuilder,
+    TaskDispatcher,
+    TaskRepository,
+)
 from src.services.standard import StandardSchemaService
 from src.services.template import TemplateService
 
@@ -23,6 +28,11 @@ def get_task_repository() -> TaskRepository:
 @lru_cache(maxsize=1)
 def get_result_builder() -> ResultBuilder:
     return ResultBuilder()
+
+
+@lru_cache(maxsize=1)
+def get_export_file_registry() -> RedisExportFileRegistry:
+    return RedisExportFileRegistry()
 
 
 @lru_cache(maxsize=1)

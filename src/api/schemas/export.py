@@ -35,5 +35,6 @@ class StandardFieldsExportRequest(BaseModel):
 
 
 class StandardFieldsExportResponse(BaseModel):
+    export_id: str
     filename: str
     download_url: str

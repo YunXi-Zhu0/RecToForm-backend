@@ -52,6 +52,7 @@ API_PORT = _get_int_env("API_PORT", 8080)
 API_CORS_ORIGINS = _get_list_env("API_CORS_ORIGINS", ["*"])
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+EXPORT_FILE_MAPPING_TTL = _get_int_env("EXPORT_FILE_MAPPING_TTL", 86400)
 RQ_QUEUE_NAME = os.getenv("RQ_QUEUE_NAME", "invoice_tasks")
 RQ_JOB_TIMEOUT = _get_int_env("RQ_JOB_TIMEOUT", 1800)
 RQ_RESULT_TTL = _get_int_env("RQ_RESULT_TTL", 86400)
