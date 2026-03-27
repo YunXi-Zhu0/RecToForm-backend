@@ -2,7 +2,12 @@ import asyncio
 from pathlib import Path
 
 from src.api.services import InlineQueueGateway
-from src.api.services.task_dispatcher import TaskCreateConfig, TaskDispatcher, parse_task_config
+from src.api.services.task_dispatcher import (
+    DuplicateUploadError,
+    TaskCreateConfig,
+    TaskDispatcher,
+    parse_task_config,
+)
 from src.api.services.task_repository import TaskRepository
 from src.services.workflow import (
     BatchWorkflowFileResult,
@@ -105,3 +110,26 @@ def test_task_dispatcher_creates_and_processes_task(tmp_path: Path) -> None:
     task = repository.get_task(created.task_id)
     assert task.input_files[0].structured_data["发票号码"] == "INV-001"
     assert task.input_files[1].error_message == "parse failed"
+
+
+def test_task_dispatcher_rejects_duplicate_uploaded_files(tmp_path: Path) -> None:
+    dispatcher = TaskDispatcher(
+        repository=TaskRepository(storage_dir=tmp_path / "tasks"),
+        queue_gateway=InlineQueueGateway(lambda task_id: None),
+        upload_dir=tmp_path / "uploads",
+    )
+
+    try:
+        asyncio.run(
+            dispatcher.create_task(
+                TaskCreateConfig(mode="standard_edit"),
+                [
+                    FakeUploadFile("a.png", b"same-image"),
+                    FakeUploadFile("renamed.png", b"same-image"),
+                ],
+            )
+        )
+    except DuplicateUploadError as exc:
+        assert exc.duplicate_files == ["a.png", "renamed.png"]
+    else:
+        raise AssertionError("Duplicate uploads should be rejected.")

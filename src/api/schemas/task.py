@@ -10,6 +10,7 @@ class TaskCreateResponse(BaseModel):
     status: str
     mode: str
     total_files: int
+    duplicate_files: List[str] = []
 
 
 class TaskStatusResponse(BaseModel):

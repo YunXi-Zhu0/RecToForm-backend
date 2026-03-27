@@ -12,6 +12,7 @@ from src.api.schemas import (
     TemplateTaskResultResponse,
 )
 from src.api.services import (
+    DuplicateUploadError,
     QueueDispatchError,
     TaskDispatcher,
     TaskNotFoundError,
@@ -33,8 +34,16 @@ async def create_task(
     try:
         task_config = parse_task_config(config)
         task = await dispatcher.create_task(task_config, list(files))
+    except DuplicateUploadError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": "Duplicate files are not allowed.",
+                "duplicate_files": exc.duplicate_files,
+            },
+        )
     except TaskValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc))
     except QueueDispatchError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
 
@@ -43,6 +52,7 @@ async def create_task(
         status=task.status,
         mode=task.mode,
         total_files=task.total_files,
+        duplicate_files=[],
     )
 
 

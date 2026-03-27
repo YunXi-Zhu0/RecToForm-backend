@@ -12,6 +12,7 @@ from src.api.services.queue import (
 )
 from src.api.services.result_builder import ResultBuilder
 from src.api.services.task_dispatcher import (
+    DuplicateUploadError,
     TaskCreateConfig,
     TaskDispatcher,
     TaskValidationError,
@@ -34,6 +35,7 @@ __all__ = [
     "RedisExportFileRegistry",
     "RQQueueGateway",
     "ResultBuilder",
+    "DuplicateUploadError",
     "TaskCreateConfig",
     "TaskDispatcher",
     "TaskFileRecord",

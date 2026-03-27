@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from openpyxl import load_workbook
+
 from src.api.services.result_builder import ResultBuilder
 from src.api.services.task_repository import TaskFileRecord, TaskRecord
 from src.services.excel import ExcelService
@@ -58,10 +60,16 @@ def test_result_builder_builds_template_preview_and_excel(tmp_path: Path) -> Non
 
     payload = builder.build_task_result(task)
 
-    assert payload["preview_headers"] == ["序号", "发票号码", "发票代码", "发票金额", "备注"]
-    assert payload["preview_rows"][0] == ["1", "INV-001", "CODE-001", "88.00", "A"]
-    assert payload["preview_rows"][1] == ["2", "INV-002", "CODE-002", "99.00", "B"]
+    assert payload["preview_headers"] == ["源文件", "序号", "发票号码", "发票代码", "发票金额", "备注"]
+    assert payload["preview_rows"][0] == ["a.png", "1", "INV-001", "CODE-001", "88.00", "A"]
+    assert payload["preview_rows"][1] == ["b.png", "2", "INV-002", "CODE-002", "99.00", "B"]
     assert Path(payload["excel_output_path"]).is_file()
+    workbook = load_workbook(payload["excel_output_path"])
+    sheet = workbook.active
+    assert sheet["A1"].value == "源文件"
+    assert sheet["A2"].value == "a.png"
+    assert sheet["A3"].value == "b.png"
+    workbook.close()
 
 
 def test_result_builder_builds_standard_edit_rows(tmp_path: Path) -> None:

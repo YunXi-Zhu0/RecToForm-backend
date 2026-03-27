@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
@@ -23,12 +24,28 @@ class TaskValidationError(ValueError):
     pass
 
 
+class DuplicateUploadError(TaskValidationError):
+    def __init__(self, duplicate_files: List[str]) -> None:
+        self.duplicate_files = list(duplicate_files)
+        super().__init__(
+            "Duplicate files are not allowed: %s" % ", ".join(self.duplicate_files)
+        )
+
+
 @dataclass(frozen=True)
 class TaskCreateConfig:
     mode: str
     template_id: str = ""
     template_version: str = ""
     extra_instructions: List[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PreparedUploadFile:
+    file_name: str
+    file_bytes: bytes
+    size: int
+    content_hash: str
 
 
 class TaskDispatcher:
@@ -50,9 +67,10 @@ class TaskDispatcher:
     async def create_task(self, config: TaskCreateConfig, uploaded_files: List[object]) -> TaskRecord:
         self._validate_task_config(config)
         self._validate_uploaded_files(uploaded_files)
+        prepared_files = await self._prepare_uploaded_files(uploaded_files)
 
         task_id = uuid.uuid4().hex
-        file_records = await self._persist_uploaded_files(task_id=task_id, uploaded_files=uploaded_files)
+        file_records = self._persist_uploaded_files(task_id=task_id, prepared_files=prepared_files)
         record = self.repository.create_task(
             task_id=task_id,
             mode=config.mode,
@@ -200,30 +218,51 @@ class TaskDispatcher:
                 error_message=str(exc),
             )
 
-    async def _persist_uploaded_files(
+    async def _prepare_uploaded_files(
         self,
-        task_id: str,
         uploaded_files: List[object],
-    ) -> List[TaskFileRecord]:
-        target_dir = self.upload_dir / task_id
-        target_dir.mkdir(parents=True, exist_ok=True)
-        records: List[TaskFileRecord] = []
+    ) -> List[PreparedUploadFile]:
+        prepared_files: List[PreparedUploadFile] = []
 
-        for index, uploaded_file in enumerate(uploaded_files, start=1):
+        for uploaded_file in uploaded_files:
             file_name = self._normalize_filename(getattr(uploaded_file, "filename", "") or "")
             file_bytes = await uploaded_file.read()
             size = len(file_bytes)
             self._validate_file_size(size=size, file_name=file_name)
             self._validate_file_type(file_name=file_name)
+            prepared_files.append(
+                PreparedUploadFile(
+                    file_name=file_name,
+                    file_bytes=file_bytes,
+                    size=size,
+                    content_hash=hashlib.sha256(file_bytes).hexdigest(),
+                )
+            )
 
-            output_path = target_dir / ("%02d_%s" % (index, file_name))
-            output_path.write_bytes(file_bytes)
+        duplicate_files = self._collect_duplicate_files(prepared_files)
+        if duplicate_files:
+            raise DuplicateUploadError(duplicate_files)
+
+        return prepared_files
+
+    def _persist_uploaded_files(
+        self,
+        task_id: str,
+        prepared_files: List[PreparedUploadFile],
+    ) -> List[TaskFileRecord]:
+        target_dir = self.upload_dir / task_id
+        target_dir.mkdir(parents=True, exist_ok=True)
+        records: List[TaskFileRecord] = []
+
+        for index, prepared_file in enumerate(prepared_files, start=1):
+            output_path = target_dir / ("%02d_%s" % (index, prepared_file.file_name))
+            output_path.write_bytes(prepared_file.file_bytes)
             records.append(
                 TaskFileRecord(
                     file_id="file-%03d" % index,
-                    file_name=file_name,
+                    file_name=prepared_file.file_name,
                     file_path=str(output_path),
-                    size=size,
+                    size=prepared_file.size,
                 )
             )
         return records
@@ -265,6 +304,26 @@ class TaskDispatcher:
         if not normalized:
             raise TaskValidationError("Uploaded file must include a filename.")
         return normalized
+
+    def _collect_duplicate_files(
+        self,
+        prepared_files: List[PreparedUploadFile],
+    ) -> List[str]:
+        duplicates_by_hash = {}
+        for item in prepared_files:
+            duplicates_by_hash.setdefault(item.content_hash, []).append(item.file_name)
+
+        duplicate_files: List[str] = []
+        seen_names = set()
+        for file_names in duplicates_by_hash.values():
+            if len(file_names) < 2:
+                continue
+            for file_name in file_names:
+                if file_name in seen_names:
+                    continue
+                duplicate_files.append(file_name)
+                seen_names.add(file_name)
+        return duplicate_files
 
     def _calculate_progress(self, total_files: int, processed_files: int) -> int:
         if total_files <= 0:

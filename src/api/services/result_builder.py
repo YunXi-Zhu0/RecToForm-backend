@@ -10,6 +10,9 @@ from src.services.template.models import ExcelFieldMapping, TemplateBundle
 from src.api.services.task_repository import TaskFileRecord, TaskRecord
 
 
+SOURCE_FILE_FIELD_ID = "源文件"
+
+
 class ResultBuilder:
     def __init__(
         self,
@@ -66,14 +69,11 @@ class ResultBuilder:
             template_version=task.template_version or None,
         )
         succeeded_items = self._select_succeeded_files(task.input_files)
-        preview_headers = [
-            bundle.default_header_labels.get(field_id, field_id)
-            for field_id in bundle.recommended_field_ids
-        ]
+        preview_headers = self._build_template_headers(bundle)
         preview_rows = [
             self._build_template_row(
                 bundle=bundle,
-                structured_data=item.structured_data,
+                item=item,
                 row_index=index,
             )
             for index, item in enumerate(succeeded_items, start=1)
@@ -103,14 +103,28 @@ class ResultBuilder:
     def _build_template_row(
         self,
         bundle: TemplateBundle,
-        structured_data: Dict[str, str],
+        item: TaskFileRecord,
         row_index: int,
     ) -> List[str]:
         row: List[str] = []
+        if SOURCE_FILE_FIELD_ID not in bundle.recommended_field_ids:
+            row.append(item.file_name)
         for field_id in bundle.recommended_field_ids:
+            if field_id == SOURCE_FILE_FIELD_ID:
+                row.append(item.file_name)
+                continue
             mapping = bundle.excel_mappings[field_id]
-            row.append(self._resolve_mapping_value(mapping, structured_data, row_index))
+            row.append(self._resolve_mapping_value(mapping, item.structured_data, row_index))
         return row
+
+    def _build_template_headers(self, bundle: TemplateBundle) -> List[str]:
+        headers = [
+            bundle.default_header_labels.get(field_id, field_id)
+            for field_id in bundle.recommended_field_ids
+        ]
+        if SOURCE_FILE_FIELD_ID in bundle.recommended_field_ids:
+            return headers
+        return [SOURCE_FILE_FIELD_ID] + headers
 
     def _resolve_mapping_value(
         self,
