@@ -53,8 +53,14 @@
 
 其中：
 
-- 本地 provider 负责图片压缩、base64 编码、OpenAI 兼容消息体构造、HTTP 异步调用、响应标准化
+- 本地 provider 负责原图字节透传、base64 编码、OpenAI 兼容消息体构造、HTTP 异步调用、响应标准化
 - 官方 provider 负责通过 `AsyncOpenAI` 调用官方兼容接口，并将响应转换成统一 `LLMResponse`
+
+补充说明：
+
+- `qwen_local_openai_compatible` 已取消 `thumbnail(...)` 缩放和 `JPEG quality` 重编码逻辑
+- 本地 provider 现在与官方 provider 一致，按原始文件 MIME 类型读取原图字节并直接拼装 data URL
+- 这样可以避免在进入模型前再次压缩画质，减少小字、印章、细表格线条等视觉信息损失
 
 ### 4. 完成官方 Qwen Provider 的图像输入支持
 
@@ -137,6 +143,7 @@
 - `python -m unittest tests.unit.test_llm_architecture`
 - `python -m unittest tests.unit.test_llm_service`
 - `python -m compileall src`
+- `python3 -m py_compile src/integrations/llm/providers/qwen/local_openai_compatible.py`
 
 当前单测已覆盖：
 
@@ -162,6 +169,10 @@
 
 原有 `docs/llm层验收文档.md` 在当前终端环境中存在乱码显示，因此本次对该文件进行了整体验收内容重写，并将阶段总结信息直接合并进来，避免重复维护两份文档。
 
+### 4. 本地 provider 压缩画质会影响票据细节保真
+
+`src/integrations/llm/providers/qwen/local_openai_compatible.py` 原先会在发送前执行缩放和 JPEG 重编码，这会让本地兼容链路与官方链路的输入保真度不一致。当前已调整为直接透传原图，统一两条 provider 链路的图像输入策略。
+
 ## 当前状态判断
 
 到当前为止，LLM 层已经完成了以下目标：
@@ -169,6 +180,7 @@
 - 分层边界已明确
 - provider 已统一到新架构
 - 官方与本地 provider 都具备图像处理能力
+- 本地 provider 已改为原图透传，不再在 LLM 集成层做二次压缩
 - `services/llm` 已承担 prompt 与 JSON 清洗职责
 - 旧 `core` 路径已退出仓库
 

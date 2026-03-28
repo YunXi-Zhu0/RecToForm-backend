@@ -1,10 +1,8 @@
 import base64
-import io
-from pathlib import Path
+import mimetypes
 from typing import Any, Dict, List, Optional, Sequence
 
 import httpx
-from PIL import Image
 
 from src.core.config import QWEN3_VL_8B_SSPU_MODEL
 from src.integrations.llm.base.llm import BaseLLMProvider
@@ -22,8 +20,6 @@ class QwenLocalOpenAICompatibleProvider(BaseLLMProvider):
         self.temperature = QWEN3_VL_8B_SSPU_MODEL["TEMPERATURE"]
         self.max_tokens = QWEN3_VL_8B_SSPU_MODEL["MAX_TOKENS"]
         self.timeout = QWEN3_VL_8B_SSPU_MODEL["TIMEOUT"]
-        self.max_image_size = QWEN3_VL_8B_SSPU_MODEL["MAX_IMAGE_SIZE"]
-        self.image_quality = QWEN3_VL_8B_SSPU_MODEL["IMAGE_QUALITY"]
 
     def get_capabilities(self) -> LLMCapabilities:
         return LLMCapabilities(
@@ -34,20 +30,11 @@ class QwenLocalOpenAICompatibleProvider(BaseLLMProvider):
             max_output_tokens=self.max_tokens,
         )
 
-    def _resize_and_encode(self, image_path: Path) -> str:
-        with Image.open(image_path) as image:
-            image.thumbnail(
-                (self.max_image_size, self.max_image_size),
-                Image.Resampling.LANCZOS,
-            )
-
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-
-            buffer = io.BytesIO()
-            image.save(buffer, format="JPEG", quality=self.image_quality)
-
-        return base64.b64encode(buffer.getvalue()).decode("utf-8")
+    def _encode_image_to_data_url(self, image_path: ImagePath) -> str:
+        mime_type, _ = mimetypes.guess_type(str(image_path))
+        resolved_mime_type = mime_type or "image/jpeg"
+        base64_image = base64.b64encode(image_path.read_bytes()).decode("utf-8")
+        return "data:%s;base64,%s" % (resolved_mime_type, base64_image)
 
     def _build_user_content(self, request: LLMRequest) -> List[Dict[str, Any]]:
         content: List[Dict[str, Any]] = []
@@ -56,12 +43,11 @@ class QwenLocalOpenAICompatibleProvider(BaseLLMProvider):
             if not image_input.path.is_file():
                 raise FileNotFoundError("Image file not found: %s" % image_input.path)
 
-            base64_image = self._resize_and_encode(image_input.path)
             content.append(
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": "data:image/jpeg;base64,%s" % base64_image,
+                        "url": self._encode_image_to_data_url(image_input.path),
                     },
                 }
             )
