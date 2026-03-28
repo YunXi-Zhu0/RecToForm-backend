@@ -23,8 +23,16 @@ async def analyze_invoice(
         )
         response = await llm_service.analyze_images(
             image_paths=document_result.image_paths,
-            user_prompt="请提取发票字段并返回 JSON",
-            system_prompt="你是发票识别助手，只返回合法JSON。",
+            user_prompt="请结合上传的全部发票图片提取发票信息，并输出完整标准 JSON。",
+            system_prompt="你是发票字段提取助手。你的任务是根据提供的发票图片提取标准字段，并严格输出 JSON。\n\n"
+            "要求：\n"
+            "1. 只能根据输入图片提取字段，禁止猜测或补造不存在的信息。\n"
+            "2. 若字段无法确认，返回空值。\n"
+            "3. 多张图片或多页 PDF 时，请综合全部图片内容后输出一个 JSON 结果。\n"
+            "4. 输出字段名及其顺序必须与系统给定的固定中文键列表完全一致。\n"
+            "5. 最终只输出合法 JSON，不要输出解释、分析过程或额外文本。\n"
+            "6. 缺失字段统一返回 `%s`。\n"
+            "7. 必须输出完整标准 JSON，即使字段缺失也要保留对应 key。\n",
             response_format={"type": "json_object"},
         )
 
@@ -76,5 +84,5 @@ async def run_llm_service(
 
 if __name__ == "__main__":
     invoice_dir = TESTS_DIR / "fixtures" / "invoices"
-    provider_name = LLM_PROVIDERS["qwen_local_openai_compatible"]["provider"]
+    provider_name = LLM_PROVIDERS["qwen_official"]["provider"]
     asyncio.run(run_llm_service(invoice_dir, provider_name))
