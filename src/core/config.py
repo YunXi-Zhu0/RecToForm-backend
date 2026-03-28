@@ -62,14 +62,14 @@ WORKFLOW_ASYNC_CONCURRENCY = _get_int_env("WORKFLOW_ASYNC_CONCURRENCY", 15)
 MAX_UPLOAD_FILES = _get_int_env("MAX_UPLOAD_FILES", 50)
 MAX_FILE_SIZE_MB = _get_int_env("MAX_FILE_SIZE_MB", 10)
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "qwen_local_openai_compatible")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "qwen_official")
 
 QWEN3_VL_PLUS_MODEL = {
-    "MODEL_NAME": "qwen3-vl-plus",
+    "MODEL_NAME": "qwen-vl-ocr",
     "API_KEY": os.getenv("QWEN3_VL_PLUS_API_KEY"),
     "BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "TEMPERATURE": _get_float_env("QWEN3_VL_PLUS_TEMPERATURE", 0.7),
-    "MAX_TOKENS": _get_int_env("QWEN3_VL_PLUS_MAX_TOKENS", 500),
+    "TEMPERATURE": _get_float_env("QWEN3_VL_PLUS_TEMPERATURE", 0.5),
+    "MAX_TOKENS": _get_int_env("QWEN3_VL_PLUS_MAX_TOKENS", 1000),
 }
 
 QWEN3_VL_8B_SSPU_MODEL = {
