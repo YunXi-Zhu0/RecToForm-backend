@@ -75,9 +75,9 @@ QWEN3_VL_PLUS_MODEL = {
 QWEN3_VL_8B_SSPU_MODEL = {
     "API_URL": os.getenv("QWEN3_VL_8B_SSPU_API_URL", ""),
     "MODEL_NAME": os.getenv("QWEN3_VL_8B_SSPU_MODEL_NAME", "/model/Qwen3-VL-8B"),
-    "TEMPERATURE": _get_float_env("QWEN3_VL_8B_SSPU_TEMPERATURE", 0.7),
+    "TEMPERATURE": _get_float_env("QWEN3_VL_8B_SSPU_TEMPERATURE", 0.3),
     "MAX_TOKENS": _get_int_env("QWEN3_VL_8B_SSPU_MAX_TOKENS", 500),
-    "TIMEOUT": _get_float_env("QWEN3_VL_8B_SSPU_TIMEOUT", 30.0),
+    "TIMEOUT": _get_float_env("QWEN3_VL_8B_SSPU_TIMEOUT", 120.0),
     "MAX_IMAGE_SIZE": _get_int_env("QWEN3_VL_8B_SSPU_MAX_IMAGE_SIZE", 1024),
     "IMAGE_QUALITY": _get_int_env("QWEN3_VL_8B_SSPU_IMAGE_QUALITY", 85),
 }
