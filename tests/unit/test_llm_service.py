@@ -62,6 +62,41 @@ class LLMServiceTests(unittest.TestCase):
         raw_text = '以下是结果：{"发票号码":"123456"} 请查收'
         self.assertEqual(extract_json_object(raw_text), '{"发票号码":"123456"}')
 
+    def test_extract_json_object_supports_multiline_invoice_json(self) -> None:
+        raw_text = """{
+    "发票代码": "",
+    "发票号码": "253170000003168913915",
+    "开票日期": "2025年12月03日",
+    "购买方名称": "上海第二工业大学",
+    "购买方纳税人识别号": "",
+    "购买方地址电话": "",
+    "购买方开户行及账号": "",
+    "货物或应税劳务、服务名称": "*汽油*92号车用汽油(VIB-92号",
+    "规格型号": "",
+    "单位": "升",
+    "数量": "32.11678832",
+    "单价": "6.06193864",
+    "金额": "194.69",
+    "税率": "13%",
+    "税额": "25.31",
+    "合计": "220.00",
+    "价税合计(大写)": "贰佰贰拾圆整",
+    "销售方名称": "中国石化销售股份有限公司上海石油分公司",
+    "销售方纳税人识别号": "91310000834486035U",
+    "销售方地址电话": "",
+    "销售方开户行及账号": "",
+    "收款人": "中国石化",
+    "复核": "中国石化",
+    "开票人": "中国石化",
+    "销售方": "",
+    "备注": "收款人:中国石化;复核人:中国石化;"
+}"""
+        self.assertEqual(extract_json_object(raw_text), raw_text)
+
+    def test_extract_json_object_skips_invalid_braces_before_json(self) -> None:
+        raw_text = '说明中的占位符 {invoice} 无需处理，最终结果：{"发票号码":"123456"}'
+        self.assertEqual(extract_json_object(raw_text), '{"发票号码":"123456"}')
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from src.services.llm.models import StructuredExtractionResult
 
@@ -31,16 +31,35 @@ def parse_structured_output(
 
 def extract_json_object(raw_text: str) -> str:
     text = raw_text.strip()
-    fenced_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.DOTALL)
+    fenced_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    candidates = [text]
     if fenced_match:
-        return fenced_match.group(1).strip()
+        candidates.insert(0, fenced_match.group(1).strip())
 
-    start_index = text.find("{")
-    end_index = text.rfind("}")
-    if start_index == -1 or end_index == -1 or end_index < start_index:
-        raise ValueError("No JSON object found in LLM output.")
+    for candidate in candidates:
+        extracted = _extract_first_json_object(candidate)
+        if extracted is not None:
+            return extracted
 
-    return text[start_index : end_index + 1].strip()
+    raise ValueError("No JSON object found in LLM output.")
+
+
+def _extract_first_json_object(text: str) -> Optional[str]:
+    decoder = json.JSONDecoder()
+
+    for start_index, char in enumerate(text):
+        if char != "{":
+            continue
+
+        try:
+            parsed, end_index = decoder.raw_decode(text[start_index:])
+        except json.JSONDecodeError:
+            continue
+
+        if isinstance(parsed, dict):
+            return text[start_index : start_index + end_index].strip()
+
+    return None
 
 
 def normalize_fields(
