@@ -63,6 +63,7 @@ class TemplateService:
             excel_template_path=definition.excel_template_path,
             recommended_field_ids=list(definition.recommended_field_ids),
             default_header_labels=dict(definition.default_header_labels),
+            default_extra_instructions=list(definition.default_extra_instructions),
             excel_mappings=self._select_target_mappings(
                 mappings=all_excel_mappings,
                 target_fields=definition.recommended_field_ids,
@@ -94,6 +95,9 @@ class TemplateService:
         return self.template_dir / matches[0]["file"]
 
     def _build_definition(self, payload: Dict[str, object]) -> TemplateDefinition:
+        raw_default_extra_instructions = payload.get("default_extra_instructions", [])
+        if not isinstance(raw_default_extra_instructions, list):
+            raise TemplateConfigError("Template default_extra_instructions must be a list.")
         return TemplateDefinition(
             template_id=str(payload["template_id"]),
             template_name=str(payload["template_name"]),
@@ -102,6 +106,7 @@ class TemplateService:
             excel_template_path=self.template_dir / str(payload["excel_template_path"]),
             recommended_field_ids=list(payload.get("recommended_field_ids", [])),
             default_header_labels=dict(payload.get("default_header_labels", {})),
+            default_extra_instructions=list(raw_default_extra_instructions),
         )
 
     def _build_all_mappings(
@@ -148,6 +153,16 @@ class TemplateService:
         if not definition.excel_template_path.is_file():
             raise TemplateConfigError(
                 "Excel template file not found: %s" % definition.excel_template_path
+            )
+
+        invalid_extra_instructions = [
+            item
+            for item in definition.default_extra_instructions
+            if not isinstance(item, str) or not item.strip()
+        ]
+        if invalid_extra_instructions:
+            raise TemplateConfigError(
+                "Template default_extra_instructions must contain non-empty strings only."
             )
 
         missing_labels = [

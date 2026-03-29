@@ -22,6 +22,8 @@ from src.services.workflow.models import (
     WorkflowStatus,
 )
 
+DEFAULT_EXTRA_INSTRUCTIONS: List[str] = []
+
 
 class WorkflowService:
     DEFAULT_STANDARD_EXPORT_TEMPLATE_ID = "standard_fields_default"
@@ -94,7 +96,12 @@ class WorkflowService:
                     else list(standard_schema.keys)
                 ),
                 missing_value=standard_schema.default_missing_value,
-                extra_instructions=request.extra_instructions,
+                extra_instructions=self._resolve_extra_instructions(
+                    request_extra_instructions=request.extra_instructions,
+                    template_extra_instructions=(
+                        template_bundle.default_extra_instructions if template_bundle else []
+                    ),
+                ),
                 json_example={
                     field_id: standard_schema.default_missing_value
                     for field_id in standard_schema.keys
@@ -236,3 +243,14 @@ class WorkflowService:
         audit_file_path.parent.mkdir(parents=True, exist_ok=True)
         with audit_file_path.open("w", encoding="utf-8") as file:
             json.dump(record.to_dict(), file, ensure_ascii=False, indent=2)
+
+    def _resolve_extra_instructions(
+        self,
+        request_extra_instructions: List[str],
+        template_extra_instructions: List[str],
+    ) -> List[str]:
+        if request_extra_instructions:
+            return list(request_extra_instructions)
+        if template_extra_instructions:
+            return list(template_extra_instructions)
+        return list(DEFAULT_EXTRA_INSTRUCTIONS)

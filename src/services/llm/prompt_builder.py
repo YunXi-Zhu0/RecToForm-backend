@@ -7,16 +7,15 @@ from src.services.llm.models import PromptContext
 def build_system_prompt(context: PromptContext) -> str:
     standard_fields_json = json.dumps(context.standard_fields, ensure_ascii=False)
     return (
-        "你是发票字段提取助手。你的任务是根据提供的发票图片提取标准字段，并严格输出 JSON。\n\n"
+        "你是发票字段提取助手。你的任务是根据提供的发票图片提取标准字段。\n\n"
         "要求：\n"
         "1. 只能根据输入图片提取字段，禁止猜测或补造不存在的信息。\n"
         "2. 若字段无法确认，返回空值。\n"
-        "3. 多张图片或多页 PDF 时，请综合全部图片内容后输出一个 JSON 结果。\n"
-        "4. 输出字段名必须与系统给定的固定中文键列表完全一致。\n"
-        "5. 最终只输出合法 JSON，不要输出解释、分析过程或额外文本。\n"
-        "6. 缺失字段统一返回 `%s`。\n"
-        "7. 必须输出完整标准 JSON，即使字段缺失也要保留对应 key。\n"
-        "8. 本次仅允许输出以下字段：%s。"
+        "3. 输出字段名必须与系统给定的固定中文键列表完全一致。\n"
+        "4. 最终只输出合法 JSON，不要输出解释、分析过程或额外文本。\n"
+        "5. 缺失字段统一返回 `%s`。\n"
+        "6. 必须输出完整标准 JSON，即使字段缺失也要保留对应 key。\n"
+        "7. 本次仅允许输出以下字段：%s。"
         % (context.missing_value, standard_fields_json)
     )
 

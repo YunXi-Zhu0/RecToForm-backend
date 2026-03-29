@@ -1,6 +1,7 @@
 import asyncio
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from src.services.excel.models import StructuredInvoiceData
 from src.services.llm.models import StructuredExtractionResult
@@ -8,7 +9,11 @@ from src.services.workflow import WorkflowRequest, WorkflowService, WorkflowStat
 
 
 class StubLLMService:
+    def __init__(self) -> None:
+        self.last_context = None
+
     async def extract_structured_data(self, image_paths, context):
+        self.last_context = context
         return StructuredExtractionResult(
             data={
                 "发票代码": "CODE-20260323",
@@ -67,9 +72,17 @@ class StubExcelService:
         return type("WriteResult", (), {"output_file_path": output_path})()
 
 
+def _create_input_image(tmp_path: Path) -> Path:
+    input_path = tmp_path / "input.png"
+    input_path.parent.mkdir(parents=True, exist_ok=True)
+    input_path.write_bytes(b"fake-image")
+    return input_path
+
+
 def test_workflow_run_generates_excel_and_audit(tmp_path: Path) -> None:
+    llm_service = StubLLMService()
     service = WorkflowService(
-        llm_service=StubLLMService(),
+        llm_service=llm_service,
         excel_service=StubExcelService(),
         output_dir=tmp_path / "outputs",
         audit_dir=tmp_path / "audits",
@@ -79,7 +92,7 @@ def test_workflow_run_generates_excel_and_audit(tmp_path: Path) -> None:
         service.run(
             WorkflowRequest(
                 task_id="task-001",
-                input_file_path="tests/fixtures/invoices/tmp.png",
+                input_file_path=str(_create_input_image(tmp_path)),
                 template_id="finance_invoice",
             )
         )
@@ -89,6 +102,10 @@ def test_workflow_run_generates_excel_and_audit(tmp_path: Path) -> None:
     assert Path(result.excel_output_path).is_file()
     assert Path(result.audit_file_path).is_file()
     assert result.structured_data.data["发票号码"] == "INV-20260323"
+    assert llm_service.last_context.extra_instructions == [
+        "金额字段保留票面原始格式。",
+        "备注字段保留票面原始内容，不要补充解释。",
+    ]
 
     audit_payload = json.loads(Path(result.audit_file_path).read_text(encoding="utf-8"))
     assert audit_payload["llm_cleaned_json"]["发票号码"] == "INV-20260323"
@@ -97,8 +114,9 @@ def test_workflow_run_generates_excel_and_audit(tmp_path: Path) -> None:
 
 
 def test_workflow_run_without_template_exports_standard_fields(tmp_path: Path) -> None:
+    llm_service = StubLLMService()
     service = WorkflowService(
-        llm_service=StubLLMService(),
+        llm_service=llm_service,
         excel_service=StubExcelService(),
         output_dir=tmp_path / "outputs",
         audit_dir=tmp_path / "audits",
@@ -108,7 +126,7 @@ def test_workflow_run_without_template_exports_standard_fields(tmp_path: Path) -
         service.run(
             WorkflowRequest(
                 task_id="task-002",
-                input_file_path="tests/fixtures/invoices/tmp.png",
+                input_file_path=str(_create_input_image(tmp_path)),
             )
         )
     )
@@ -119,3 +137,55 @@ def test_workflow_run_without_template_exports_standard_fields(tmp_path: Path) -
     assert audit_payload["template_snapshot"]["export_mode"] == "standard_fields"
     assert audit_payload["export_fields"][0] == "发票代码"
     assert audit_payload["prompt_context"]["template_id"] == "standard_fields_default"
+    assert llm_service.last_context.extra_instructions == []
+
+
+def test_workflow_prefers_request_extra_instructions_over_template_defaults(tmp_path: Path) -> None:
+    llm_service = StubLLMService()
+    service = WorkflowService(
+        llm_service=llm_service,
+        excel_service=StubExcelService(),
+        output_dir=tmp_path / "outputs",
+        audit_dir=tmp_path / "audits",
+    )
+
+    asyncio.run(
+        service.run(
+            WorkflowRequest(
+                task_id="task-003",
+                input_file_path=str(_create_input_image(tmp_path)),
+                template_id="finance_invoice",
+                extra_instructions=["优先使用用户自定义附加要求。"],
+            )
+        )
+    )
+
+    assert llm_service.last_context.extra_instructions == ["优先使用用户自定义附加要求。"]
+
+
+def test_workflow_uses_system_default_extra_instructions_when_no_request_or_template(tmp_path: Path) -> None:
+    llm_service = StubLLMService()
+    service = WorkflowService(
+        llm_service=llm_service,
+        excel_service=StubExcelService(),
+        output_dir=tmp_path / "outputs",
+        audit_dir=tmp_path / "audits",
+    )
+
+    with patch(
+        "src.services.workflow.service.DEFAULT_EXTRA_INSTRUCTIONS",
+        ["保留原票面日期格式。", "缺失字段返回空字符串。"],
+    ):
+        asyncio.run(
+            service.run(
+                WorkflowRequest(
+                    task_id="task-004",
+                    input_file_path=str(_create_input_image(tmp_path)),
+                )
+            )
+        )
+
+    assert llm_service.last_context.extra_instructions == [
+        "保留原票面日期格式。",
+        "缺失字段返回空字符串。",
+    ]

@@ -12,6 +12,7 @@ class TemplateDefinition:
     excel_template_path: Path
     recommended_field_ids: List[str] = field(default_factory=list)
     default_header_labels: Dict[str, str] = field(default_factory=dict)
+    default_extra_instructions: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ class TemplateBundle:
     excel_template_path: Path
     recommended_field_ids: List[str]
     default_header_labels: Dict[str, str]
+    default_extra_instructions: List[str]
     excel_mappings: Dict[str, ExcelFieldMapping]
     referenced_standard_fields: List[str]
 

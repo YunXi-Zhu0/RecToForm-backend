@@ -27,6 +27,22 @@ class LLMServiceTests(unittest.TestCase):
         self.assertIn("图片页码顺序：[1, 2]", prompts["user_prompt"])
         self.assertNotIn("可选字段", prompts["user_prompt"])
 
+    def test_build_prompts_omits_extra_instructions_when_context_is_empty(self) -> None:
+        context = PromptContext(
+            template_id="template_a",
+            template_name="模板A",
+            file_type="PDF",
+            page_indices=[1],
+            standard_fields=["发票号码"],
+            schema_version="v1",
+            recommended_output_fields=["发票号码"],
+            extra_instructions=[],
+        )
+
+        prompts = self.service.build_prompts(context)
+
+        self.assertNotIn("附加要求：", prompts["user_prompt"])
+
     def test_parse_json_result_strips_fenced_wrapper_and_filters_fields(self) -> None:
         raw_text = """```json
 {
