@@ -143,6 +143,7 @@ class WorkflowService:
                         standard_fields=list(standard_schema.keys),
                         output_dir=self.output_dir / "excel",
                         output_filename="%s_standard_fields.xlsx" % request.task_id,
+                        source_file_name=request.source_file_name or Path(request.input_file_path).name,
                     )
                 )
             excel_output_path = str(excel_result.output_file_path)

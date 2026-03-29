@@ -66,8 +66,8 @@ class StubResultBuilder:
             "task_id": task.task_id,
             "mode": task.mode,
             "status": "partially_succeeded",
-            "standard_fields": ["发票代码", "发票号码"],
-            "rows": [["CODE-001", "INV-001"]],
+            "standard_fields": ["源文件", "发票代码", "发票号码"],
+            "rows": [["a.png", "CODE-001", "INV-001"]],
             "failed_items": [{"file_id": "file-002", "file_name": "b.png", "error_message": "parse failed"}],
             "excel_output_path": "",
         }
@@ -106,7 +106,7 @@ def test_task_dispatcher_creates_and_processes_task(tmp_path: Path) -> None:
     assert finished.succeeded_files == 1
     assert finished.failed_files == 1
     payload = repository.load_result_payload(created.task_id)
-    assert payload["rows"] == [["CODE-001", "INV-001"]]
+    assert payload["rows"] == [["a.png", "CODE-001", "INV-001"]]
     task = repository.get_task(created.task_id)
     assert task.input_files[0].structured_data["发票号码"] == "INV-001"
     assert task.input_files[1].error_message == "parse failed"

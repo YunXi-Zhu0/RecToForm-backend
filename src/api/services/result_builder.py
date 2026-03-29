@@ -51,13 +51,21 @@ class ResultBuilder:
     def _build_standard_edit_result(self, task: TaskRecord) -> Dict[str, Any]:
         schema = self.standard_schema_service.load_schema()
         succeeded_items = self._select_succeeded_files(task.input_files)
+        headers = list(schema.keys)
+        if SOURCE_FILE_FIELD_ID not in headers:
+            headers = [SOURCE_FILE_FIELD_ID] + headers
         return {
             "task_id": task.task_id,
             "mode": task.mode,
             "status": task.status,
-            "standard_fields": list(schema.keys),
+            "standard_fields": headers,
             "rows": [
-                [item.structured_data.get(field_name, DEFAULT_MISSING_VALUE) for field_name in schema.keys]
+                [
+                    item.file_name
+                    if field_name == SOURCE_FILE_FIELD_ID
+                    else item.structured_data.get(field_name, DEFAULT_MISSING_VALUE)
+                    for field_name in headers
+                ]
                 for item in succeeded_items
             ],
             "failed_items": self._build_failed_items(task.input_files),

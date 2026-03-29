@@ -25,6 +25,7 @@ class WorkflowStatus(str, Enum):
 class WorkflowRequest:
     task_id: str
     input_file_path: str
+    source_file_name: str = ""
     template_id: Optional[str] = None
     template_version: Optional[str] = None
     extra_instructions: List[str] = field(default_factory=list)

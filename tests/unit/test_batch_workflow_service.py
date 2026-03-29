@@ -11,7 +11,11 @@ from src.services.workflow import (
 
 
 class StubWorkflowService:
+    def __init__(self) -> None:
+        self.requests = []
+
     async def run(self, request):
+        self.requests.append(request)
         if request.input_file_path.endswith("bad.png"):
             raise ValueError("llm failed")
         return WorkflowResult(
@@ -30,11 +34,12 @@ class StubWorkflowService:
 
 def test_batch_workflow_service_returns_partial_success() -> None:
     stages = []
+    workflow_service = StubWorkflowService()
 
     async def progress_callback(stage, processed_files, succeeded_files, failed_files):
         stages.append((stage.value, processed_files, succeeded_files, failed_files))
 
-    service = BatchWorkflowService(workflow_service=StubWorkflowService(), concurrency=2)
+    service = BatchWorkflowService(workflow_service=workflow_service, concurrency=2)
     result = asyncio.run(
         service.run(
             BatchWorkflowRequest(
@@ -65,3 +70,4 @@ def test_batch_workflow_service_returns_partial_success() -> None:
     assert result.file_results[1].structured_data["发票号码"].startswith("INV-task-001")
     assert stages[0][0] == "file_preprocessing"
     assert stages[-1][0] == "assembling_results"
+    assert sorted(request.source_file_name for request in workflow_service.requests) == ["bad.png", "ok.png"]

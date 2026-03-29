@@ -150,14 +150,17 @@ def test_write_standard_fields_creates_generic_excel(tmp_path: Path) -> None:
             standard_fields=["发票代码", "发票号码", "备注"],
             output_dir=tmp_path,
             output_filename="standard.xlsx",
+            source_file_name="invoice-003.png",
         )
     )
 
     workbook = load_workbook(result.output_file_path)
     sheet = workbook["Sheet1"]
-    assert sheet["A1"].value == "发票代码"
-    assert sheet["B1"].value == "发票号码"
-    assert sheet["C1"].value == "备注"
-    assert sheet["A2"].value == "CODE-003"
-    assert sheet["B2"].value == "INV-003"
-    assert sheet["C2"].value == "generic.xlsx"
+    assert sheet["A1"].value == "源文件"
+    assert sheet["B1"].value == "发票代码"
+    assert sheet["C1"].value == "发票号码"
+    assert sheet["D1"].value == "备注"
+    assert sheet["A2"].value == "invoice-003.png"
+    assert sheet["B2"].value == "CODE-003"
+    assert sheet["C2"].value == "INV-003"
+    assert sheet["D2"].value == "generic.xlsx"

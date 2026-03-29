@@ -33,6 +33,7 @@ class StandardExcelWriteRequest:
     output_dir: Path
     output_filename: str = ""
     sheet_name: str = "Sheet1"
+    source_file_name: str = ""
 
 
 @dataclass(frozen=True)

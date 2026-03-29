@@ -46,6 +46,7 @@ class BatchWorkflowService:
                 workflow_request = WorkflowRequest(
                     task_id="%s_%s" % (request.task_id, file_input.file_id),
                     input_file_path=file_input.input_file_path,
+                    source_file_name=file_input.file_name,
                     template_id=request.template_id if request.mode == "template" else None,
                     template_version=request.template_version if request.mode == "template" else None,
                     extra_instructions=list(request.extra_instructions),

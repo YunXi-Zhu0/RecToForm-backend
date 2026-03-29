@@ -110,7 +110,9 @@ def test_result_builder_builds_standard_edit_rows(tmp_path: Path) -> None:
     payload = builder.build_task_result(task)
 
     assert payload["status"] == "partially_succeeded"
-    assert payload["standard_fields"][0] == "发票代码"
-    assert payload["rows"][0][0] == "CODE-001"
-    assert payload["rows"][0][1] == "INV-001"
+    assert payload["standard_fields"][0] == "源文件"
+    assert payload["standard_fields"][1] == "发票代码"
+    assert payload["rows"][0][0] == "a.png"
+    assert payload["rows"][0][1] == "CODE-001"
+    assert payload["rows"][0][2] == "INV-001"
     assert payload["failed_items"][0]["file_name"] == "b.png"

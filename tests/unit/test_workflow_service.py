@@ -51,6 +51,9 @@ class StubLLMService:
 
 
 class StubExcelService:
+    def __init__(self) -> None:
+        self.last_standard_request = None
+
     def build_structured_invoice_data(self, result, standard_fields):
         normalized = {field_name: str(result.data.get(field_name, "")) for field_name in standard_fields}
         return StructuredInvoiceData(
@@ -66,6 +69,7 @@ class StubExcelService:
         return type("WriteResult", (), {"output_file_path": output_path})()
 
     def write_standard_fields(self, request):
+        self.last_standard_request = request
         output_path = request.output_dir / request.output_filename
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text("standard_fields", encoding="utf-8")
@@ -115,9 +119,10 @@ def test_workflow_run_generates_excel_and_audit(tmp_path: Path) -> None:
 
 def test_workflow_run_without_template_exports_standard_fields(tmp_path: Path) -> None:
     llm_service = StubLLMService()
+    excel_service = StubExcelService()
     service = WorkflowService(
         llm_service=llm_service,
-        excel_service=StubExcelService(),
+        excel_service=excel_service,
         output_dir=tmp_path / "outputs",
         audit_dir=tmp_path / "audits",
     )
@@ -138,6 +143,7 @@ def test_workflow_run_without_template_exports_standard_fields(tmp_path: Path) -
     assert audit_payload["export_fields"][0] == "发票代码"
     assert audit_payload["prompt_context"]["template_id"] == "standard_fields_default"
     assert llm_service.last_context.extra_instructions == []
+    assert excel_service.last_standard_request.source_file_name == "input.png"
 
 
 def test_workflow_prefers_request_extra_instructions_over_template_defaults(tmp_path: Path) -> None:

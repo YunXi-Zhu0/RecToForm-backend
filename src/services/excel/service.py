@@ -18,6 +18,9 @@ class ExcelWriteError(ValueError):
     pass
 
 
+SOURCE_FILE_FIELD_ID = "源文件"
+
+
 class ExcelService:
     def __init__(self, output_dir: Optional[Path] = None) -> None:
         self.output_dir = Path(output_dir or DEFAULT_OUTPUT_DIR)
@@ -58,13 +61,21 @@ class ExcelService:
         sheet = workbook.active
         sheet.title = request.sheet_name
 
+        headers = list(request.standard_fields)
+        if request.source_file_name and SOURCE_FILE_FIELD_ID not in headers:
+            headers = [SOURCE_FILE_FIELD_ID] + headers
+
         written_fields = []
-        for column_index, field_name in enumerate(request.standard_fields, start=1):
+        for column_index, field_name in enumerate(headers, start=1):
             sheet.cell(row=1, column=column_index, value=field_name)
+            if field_name == SOURCE_FILE_FIELD_ID:
+                cell_value = request.source_file_name
+            else:
+                cell_value = request.structured_data.data.get(field_name, DEFAULT_MISSING_VALUE)
             sheet.cell(
                 row=2,
                 column=column_index,
-                value=request.structured_data.data.get(field_name, DEFAULT_MISSING_VALUE),
+                value=cell_value,
             )
             written_fields.append(field_name)
 
