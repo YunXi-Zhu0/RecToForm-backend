@@ -1,5 +1,7 @@
 import unittest
+from base64 import b64decode
 from base64 import b64encode
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -32,6 +34,27 @@ class LLMArchitectureTests(unittest.TestCase):
     def test_factory_creates_local_provider(self) -> None:
         provider = LLMFactory.create("qwen_local_openai_compatible")
         self.assertIsInstance(provider, QwenLocalOpenAICompatibleProvider)
+
+    def test_local_provider_compresses_image_to_jpeg_data_url(self) -> None:
+        provider = QwenLocalOpenAICompatibleProvider()
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed in this environment.")
+
+        with TemporaryDirectory() as temp_dir:
+            image_path = Path(temp_dir) / "invoice.png"
+            Image.new("RGBA", (2400, 1200), (255, 0, 0, 255)).save(image_path)
+
+            data_url = provider._encode_image_to_data_url(image_path)
+
+        self.assertTrue(data_url.startswith("data:image/jpeg;base64,"))
+
+        encoded_payload = data_url.split(",", 1)[1]
+        decoded_bytes = b64decode(encoded_payload)
+        with Image.open(BytesIO(decoded_bytes)) as image:
+            self.assertEqual(image.format, "JPEG")
+            self.assertLessEqual(max(image.size), provider.max_image_size)
 
     def test_factory_validates_capabilities(self) -> None:
         with self.assertRaises(ValueError):
