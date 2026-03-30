@@ -42,14 +42,10 @@ if __name__ == "__main__":
 
     from src.core.config import TESTS_DIR
 
-    path = TESTS_DIR / "fixtures" / "invoices" / "汽油25.pdf"
+    path = TESTS_DIR / "fixtures" / "invoices" / "page_001.png"
     template_id = "finance_invoice"
     template_version = "v1"
-    extra_instructions = [
-        "Return valid JSON only.",
-        "Keep the original amount format from the invoice.",
-        "Use an empty string for missing fields.",
-    ]
+    extra_instructions = []
 
     asyncio.run(
         run_workflow_service(

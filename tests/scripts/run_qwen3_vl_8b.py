@@ -54,10 +54,17 @@ def analyze_image(image_path, prompt):
 if __name__ == "__main__":
     from src.core.config import TESTS_DIR
 
-    path = TESTS_DIR / "fixtures" / "invoices" / "tmp.png"
+    path = TESTS_DIR / "fixtures" / "invoices" / "page_001.png"
 
     prompt = """
-    鐜板湪浣犳槸涓€鍚嶄笓涓氱殑鍙戠エ瀹℃煡鍛? 璇锋牴鎹笅闈㈢粰鍑虹殑淇℃伅, 鎻愬彇鍙戠エ鍥剧墖涓搴旂殑瀛楁鍙婂叾瀵瑰簲鐨勬暟鎹? 浠son褰㈠紡杩斿洖
+        "你是发票字段提取助手。你的任务是根据提供的发票图片提取标准字段。\n\n"
+        "要求：\n"
+        "1. 只能根据输入图片提取字段，禁止猜测或补造不存在的信息。\n"
+        "2. 若字段无法确认，返回空值。\n"
+        "3. 输出字段名必须与系统给定的固定中文键列表完全一致。\n"
+        "4. 最终只输出合法 JSON，不要输出解释、分析过程或额外文本。\n"
+        "5. 缺失字段统一返回 `%s`。\n"
+        "6. 必须输出完整标准 JSON，即使字段缺失也要保留对应 key。\n"
     """
 
     result = analyze_image(path, prompt)
