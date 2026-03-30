@@ -11,10 +11,7 @@
     "发票金额",
     "备注"
   ],
-  "default_extra_instructions": [
-    "1. '合计'字段的值, 只需要纯阿拉伯数字, 一定不要包含其他字符, 例如'123.45'。",
-    "2. 若发票上没有发票代码，则直接填写空值, 千万不要伪造！"
-  ],
+  "default_extra_instructions": [],
   "default_header_labels": {
     "序号": "序号",
     "发票号码": "发票号码",

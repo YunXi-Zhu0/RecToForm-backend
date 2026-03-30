@@ -21,31 +21,8 @@ def build_system_prompt(context: PromptContext) -> str:
 
 
 def build_user_prompt(context: PromptContext) -> str:
-    standard_fields_json = json.dumps(context.standard_fields, ensure_ascii=False)
-    recommended_output_fields_json = json.dumps(
-        context.recommended_output_fields,
-        ensure_ascii=False,
-    )
-    page_indices_json = json.dumps(context.page_indices, ensure_ascii=False)
-    json_example = context.json_example or _build_json_example(context)
-    json_example_text = json.dumps(json_example, ensure_ascii=False, indent=2)
-
     sections = [
-        "当前任务：请结合上传的全部发票图片提取发票信息，并输出完整标准 JSON。",
-        "当前模板：%s（ID: %s）" % (context.template_name, context.template_id),
-        "标准 JSON 版本：%s" % context.schema_version,
-        "固定输出字段：%s" % standard_fields_json,
-        "模板默认导出表头：%s" % recommended_output_fields_json,
-        "文件类型：%s" % context.file_type,
-        "图片页码顺序：%s" % page_indices_json,
-        "输出 JSON 示例：\n%s" % json_example_text,
-        (
-            "图像分析规则：\n"
-            "1. 按页码顺序综合分析全部图片。\n"
-            "2. 尽量保留票面原始表达。\n"
-            "3. 若字段无法确认，请返回缺失值，不要猜测。\n"
-            "4. 所有固定中文键都必须出现在最终 JSON 中。"
-        ),
+        "当前任务：请结合上传的发票图片提取发票信息，并输出完整标准 JSON。"
     ]
 
     if context.extra_instructions:
