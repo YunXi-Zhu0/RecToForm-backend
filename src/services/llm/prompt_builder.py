@@ -22,7 +22,17 @@ def build_system_prompt(context: PromptContext) -> str:
 
 def build_user_prompt(context: PromptContext) -> str:
     sections = [
-        "当前任务：请结合上传的发票图片提取发票信息，并输出完整标准 JSON。"
+        "当前任务：请结合上传的发票图片提取发票信息，并输出完整标准 JSON。\n"
+        "返回json示例如下\n"
+        """
+            {
+                "发票号码": "25317000002264951341",
+                "发票代码": "",
+                "发票金额": "123.45"
+            }
+            \n
+        """
+        "注意: 其中'发票代码'为值缺失的字段, 其余的是有值的字段"
     ]
 
     if context.extra_instructions:
