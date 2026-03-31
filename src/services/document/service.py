@@ -2,7 +2,16 @@ import mimetypes
 from pathlib import Path
 from typing import List, Optional
 
-from src.core.config import DEFAULT_DOCUMENT_OUTPUT_DIR
+from src.core.config import (
+    DEFAULT_DOCUMENT_OUTPUT_DIR,
+    DOCUMENT_IMAGE_AUTOCONTRAST_CUTOFF,
+    DOCUMENT_IMAGE_BRIGHTNESS,
+    DOCUMENT_IMAGE_CONTRAST,
+    DOCUMENT_IMAGE_ENHANCE_ENABLED,
+    DOCUMENT_IMAGE_SHARPEN_PERCENT,
+    DOCUMENT_IMAGE_SHARPEN_RADIUS,
+    DOCUMENT_IMAGE_SHARPEN_THRESHOLD,
+)
 from src.services.document.models import (
     DocumentManifest,
     DocumentParseResult,
@@ -20,6 +29,7 @@ class DocumentService:
 
     def __init__(self, output_dir: Optional[Path] = None) -> None:
         self.output_dir = Path(output_dir or DEFAULT_DOCUMENT_OUTPUT_DIR)
+        self.enhance_images = DOCUMENT_IMAGE_ENHANCE_ENABLED
 
     def parse(self, input_file_path: Path, task_id: Optional[str] = None) -> DocumentParseResult:
         path = Path(input_file_path)
@@ -73,6 +83,7 @@ class DocumentService:
         output_dir = self.output_dir / (task_id or path.stem)
         output_dir.mkdir(parents=True, exist_ok=True)
         rendered_paths = renderer(path, output_dir)
+        self._enhance_rendered_images(rendered_paths)
         page_images = [
             PageImageItem(page_index=index + 1, image_path=str(image_path), source_type="pdf_page")
             for index, image_path in enumerate(rendered_paths)
@@ -90,6 +101,39 @@ class DocumentService:
             uploaded_file=uploaded,
         )
 
+    def _enhance_rendered_images(self, rendered_paths: List[Path]) -> None:
+        if not self.enhance_images:
+            return
+
+        for path in rendered_paths:
+            self._enhance_image(path)
+
+    def _enhance_image(self, path: Path) -> Path:
+        try:
+            from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+        except ImportError as exc:  # pragma: no cover - pillow is a project dependency
+            raise DocumentProcessingError(
+                "Image enhancement requires Pillow to be installed."
+            ) from exc
+
+        with Image.open(path) as image:
+            processed = image.convert("RGB") if image.mode not in {"RGB", "L"} else image.copy()
+            processed = ImageOps.autocontrast(
+                processed,
+                cutoff=DOCUMENT_IMAGE_AUTOCONTRAST_CUTOFF,
+            )
+            processed = ImageEnhance.Contrast(processed).enhance(DOCUMENT_IMAGE_CONTRAST)
+            processed = ImageEnhance.Brightness(processed).enhance(DOCUMENT_IMAGE_BRIGHTNESS)
+            processed = processed.filter(
+                ImageFilter.UnsharpMask(
+                    radius=DOCUMENT_IMAGE_SHARPEN_RADIUS,
+                    percent=DOCUMENT_IMAGE_SHARPEN_PERCENT,
+                    threshold=DOCUMENT_IMAGE_SHARPEN_THRESHOLD,
+                )
+            )
+            processed.save(path)
+        return path
+
     def _resolve_pdf_renderer(self):
         try:
             import fitz  # type: ignore
@@ -99,7 +143,7 @@ class DocumentService:
                 output_paths: List[Path] = []
                 try:
                     for index, page in enumerate(document):
-                        pixmap = page.get_pixmap()
+                        pixmap = page.get_pixmap(matrix=fitz.Matrix(3, 3))
                         output_path = output_dir / ("page_%03d.png" % (index + 1))
                         pixmap.save(output_path)
                         output_paths.append(output_path)
@@ -119,7 +163,7 @@ class DocumentService:
                 output_paths: List[Path] = []
                 for index in range(len(pdf)):
                     page = pdf[index]
-                    bitmap = page.render(scale=2)
+                    bitmap = page.render(scale=3)
                     image = bitmap.to_pil()
                     output_path = output_dir / ("page_%03d.png" % (index + 1))
                     image.save(output_path)

@@ -25,6 +25,18 @@ def _get_int_env(key: str, default: int) -> int:
     return int(value)
 
 
+def _get_bool_env(key: str, default: bool) -> bool:
+    value = os.getenv(key)
+    if value is None or value.strip() == "":
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
 def _get_list_env(key: str, default: List[str]) -> List[str]:
     value = os.getenv(key)
     if value is None or value.strip() == "":
@@ -44,6 +56,13 @@ API_UPLOAD_DIR = API_OUTPUT_DIR / "uploads"
 API_TASK_DIR = API_OUTPUT_DIR / "tasks"
 API_EXPORT_DIR = API_OUTPUT_DIR / "exports"
 DEFAULT_MISSING_VALUE = ""
+DOCUMENT_IMAGE_ENHANCE_ENABLED = _get_bool_env("DOCUMENT_IMAGE_ENHANCE_ENABLED", True)
+DOCUMENT_IMAGE_AUTOCONTRAST_CUTOFF = _get_float_env("DOCUMENT_IMAGE_AUTOCONTRAST_CUTOFF", 0.5)
+DOCUMENT_IMAGE_CONTRAST = _get_float_env("DOCUMENT_IMAGE_CONTRAST", 1.03)
+DOCUMENT_IMAGE_BRIGHTNESS = _get_float_env("DOCUMENT_IMAGE_BRIGHTNESS", 1.00)
+DOCUMENT_IMAGE_SHARPEN_RADIUS = _get_float_env("DOCUMENT_IMAGE_SHARPEN_RADIUS", 0.8)
+DOCUMENT_IMAGE_SHARPEN_PERCENT = _get_int_env("DOCUMENT_IMAGE_SHARPEN_PERCENT", 80)
+DOCUMENT_IMAGE_SHARPEN_THRESHOLD = _get_int_env("DOCUMENT_IMAGE_SHARPEN_THRESHOLD", 3)
 
 API_TITLE = os.getenv("API_TITLE", "RecToForm API")
 API_PREFIX = os.getenv("API_PREFIX", "/api/v1")
