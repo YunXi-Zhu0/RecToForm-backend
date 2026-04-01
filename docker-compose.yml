@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rec2form-backend
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - rec2form_outputs:/app/outputs
+    depends_on:
+      - redis
+    command: ["uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8080"]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rec2form-worker
+    env_file:
+      - .env
+    volumes:
+      - rec2form_outputs:/app/outputs
+    depends_on:
+      - redis
+    command: ["rq", "worker", "invoice_tasks"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: rec2form-redis
+    restart: unless-stopped
+
+volumes:
+  rec2form_outputs:
