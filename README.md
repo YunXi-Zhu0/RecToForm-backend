@@ -1,5 +1,6 @@
 # RecToForm-backend
-一个AI Workflow项目, 基于 fastapi 和 llm 的发票信息提取与自动填表系统服务端，支持pdf、图片多种格式输入，批量识别提取发票信息并生成excel表格
+一个AI Workflow项目, 基于 fastapi 和 llm 的发票信息提取与自动填表系统服务端，支持pdf、图片多种格式输入，批量识别提取发票信息并生成excel表格\
+tips: 本项目为前后端分离架构, 本仓库仅为服务端; 前端展示和交互功能请移步 [RecToForm-frontend](https://github.com/YunXi-Zhu0/RecToForm-frontend)
 
 
 # 一、产品功能演示
