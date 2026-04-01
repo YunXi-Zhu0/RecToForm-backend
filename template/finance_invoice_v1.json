@@ -1,0 +1,64 @@
+{
+  "template_id": "finance_invoice",
+  "template_name": "财务系统录入发票字段",
+  "template_version": "v1",
+  "mapping_version": "v1",
+  "excel_template_path": "assets/finance_invoice_template_v1.xlsx",
+  "recommended_field_ids": [
+    "序号",
+    "发票号码",
+    "发票代码",
+    "发票金额",
+    "备注"
+  ],
+  "default_extra_instructions": [],
+  "default_header_labels": {
+    "序号": "序号",
+    "发票号码": "发票号码",
+    "发票代码": "发票代码",
+    "发票金额": "发票金额",
+    "备注": "备注"
+  },
+  "excel_mappings": [
+    {
+      "field_id": "序号",
+      "sheet_name": "Sheet1",
+      "cell": "A2",
+      "write_mode": "overwrite",
+      "value_source": "literal",
+      "default_value": "1"
+    },
+    {
+      "field_id": "发票号码",
+      "sheet_name": "Sheet1",
+      "cell": "B2",
+      "write_mode": "overwrite",
+      "value_source": "standard",
+      "source_key": "发票号码"
+    },
+    {
+      "field_id": "发票代码",
+      "sheet_name": "Sheet1",
+      "cell": "C2",
+      "write_mode": "overwrite",
+      "value_source": "standard",
+      "source_key": "发票代码"
+    },
+    {
+      "field_id": "发票金额",
+      "sheet_name": "Sheet1",
+      "cell": "D2",
+      "write_mode": "overwrite",
+      "value_source": "standard",
+      "source_key": "金额"
+    },
+    {
+      "field_id": "备注",
+      "sheet_name": "Sheet1",
+      "cell": "E2",
+      "write_mode": "overwrite",
+      "value_source": "standard",
+      "source_key": "备注"
+    }
+  ]
+}

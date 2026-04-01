@@ -1,0 +1,131 @@
+{
+  "template_id": "asset_import",
+  "template_name": "大创低值材料资产入库模板自动导入",
+  "template_version": "v1",
+  "mapping_version": "v1",
+  "excel_template_path": "assets/asset_import_template_v1.xlsx",
+  "recommended_field_ids": [
+    "低值材料分类号",
+    "资产名称",
+    "品牌",
+    "规格型号",
+    "单位",
+    "数量",
+    "单价",
+    "总价",
+    "供应商",
+    "发票编号",
+    "开票日期",
+    "存放地址",
+    "备注"
+  ],
+  "default_extra_instructions": [],
+  "default_header_labels": {
+    "低值材料分类号": "低值材料分类号",
+    "资产名称": "资产名称",
+    "品牌": "品牌",
+    "规格型号": "规格型号",
+    "单位": "单位",
+    "数量": "数量",
+    "单价": "单价",
+    "总价": "总价",
+    "供应商": "供应商",
+    "发票编号": "发票编号",
+    "开票日期": "开票日期",
+    "存放地址": "存放地址",
+    "备注": "备注"
+  },
+  "excel_mappings": [
+    {
+      "field_id": "低值材料分类号",
+      "sheet_name": "Sheet1",
+      "cell": "A2",
+      "value_source": "rule",
+      "default_value": ""
+    },
+    {
+      "field_id": "资产名称",
+      "sheet_name": "Sheet1",
+      "cell": "B2",
+      "value_source": "standard",
+      "source_key": "货物或应税劳务、服务名称"
+    },
+    {
+      "field_id": "品牌",
+      "sheet_name": "Sheet1",
+      "cell": "C2",
+      "value_source": "user",
+      "default_value": ""
+    },
+    {
+      "field_id": "规格型号",
+      "sheet_name": "Sheet1",
+      "cell": "D2",
+      "value_source": "standard",
+      "source_key": "规格型号"
+    },
+    {
+      "field_id": "单位",
+      "sheet_name": "Sheet1",
+      "cell": "E2",
+      "value_source": "standard",
+      "source_key": "单位"
+    },
+    {
+      "field_id": "数量",
+      "sheet_name": "Sheet1",
+      "cell": "F2",
+      "value_source": "standard",
+      "source_key": "数量"
+    },
+    {
+      "field_id": "单价",
+      "sheet_name": "Sheet1",
+      "cell": "G2",
+      "value_source": "standard",
+      "source_key": "单价"
+    },
+    {
+      "field_id": "总价",
+      "sheet_name": "Sheet1",
+      "cell": "H2",
+      "value_source": "standard",
+      "source_key": "合计"
+    },
+    {
+      "field_id": "供应商",
+      "sheet_name": "Sheet1",
+      "cell": "I2",
+      "value_source": "standard",
+      "source_key": "销售方名称"
+    },
+    {
+      "field_id": "发票编号",
+      "sheet_name": "Sheet1",
+      "cell": "J2",
+      "value_source": "standard",
+      "source_key": "发票号码"
+    },
+    {
+      "field_id": "开票日期",
+      "sheet_name": "Sheet1",
+      "cell": "K2",
+      "value_source": "standard",
+      "source_key": "开票日期"
+    },
+    {
+      "field_id": "存放地址",
+      "sheet_name": "Sheet1",
+      "cell": "L2",
+      "value_source": "user",
+      "default_value": ""
+    },
+    {
+      "field_id": "备注",
+      "sheet_name": "Sheet1",
+      "cell": "M2",
+      "value_source": "standard",
+      "source_key": "备注"
+    }
+  ]
+}

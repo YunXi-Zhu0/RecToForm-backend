@@ -1,15 +1,28 @@
+# .venv .idea
+.venv
+.idea
+
+# Python cache
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 
-.idea/
+# .env
+*.env
 
-venv/
-env/
-.venv/
-.env/
+# runtime outputs
+outputs/
 
-# 上传/下载/分析生成的临时文件夹
-functions/upload/uploaded_files/
-functions/download/downloading_files/
+# tests
+tests/*
+!tests/__init__.py
+!tests/README.md
+!tests/fixtures/
+!tests/fixtures/**
+!tests/scripts/
+!tests/scripts/*.py
+!tests/unit/
+!tests/unit/*.py
+
+# test artifacts
+tests/__pycache__/
+tests/scripts/outputs/
